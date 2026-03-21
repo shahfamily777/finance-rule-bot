@@ -20,6 +20,9 @@
 # production
 /build
 
+# IDE
+.idea/
+
 # misc
 .DS_Store
 *.pem
@@ -32,9 +35,15 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
+
+# local / duplicate copies (do not publish)
+Personal-projects.csv
+finance_rules_bot_template.zip
+finance_rules_bot_template/
 
 # typescript
 *.tsbuildinfo

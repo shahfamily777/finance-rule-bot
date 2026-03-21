@@ -31,6 +31,28 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This app is not tied to any Vercel account until you connect it. Next.js is built by Vercel and deploys with no extra config in this repo.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### One-time setup
+
+1. Push this repo to GitHub (or GitLab / Bitbucket).
+2. Sign in at [vercel.com](https://vercel.com) and click **Add New… → Project**.
+3. Import the repository. Vercel will detect **Next.js** and use `npm run build` / `next start` automatically.
+4. Under **Environment Variables**, add:
+   - **`OPENAI_API_KEY`** — your OpenAI API key (required for `/api/chat` to work). Apply to **Production** (and Preview if you want previews to call the API).
+5. Deploy. You get a URL like `https://<project>.vercel.app`.
+
+Local development: copy `.env.example` to `.env.local` and set `OPENAI_API_KEY`.
+
+### Deploy from your machine (Cursor terminal is fine)
+
+You do not have to use the Vercel website for every deploy. From the project folder:
+
+```bash
+npm run deploy        # preview deployment
+npm run deploy:prod   # production
+```
+
+The first run will open the browser (or show a link) so you can **log in to Vercel** and link the project. After that, deploys can stay in the terminal. Set **`OPENAI_API_KEY`** in the [Vercel dashboard](https://vercel.com/dashboard) under your project → **Settings → Environment Variables** (the CLI does not replace that step for secrets).
+
+More detail: [Next.js on Vercel](https://vercel.com/docs/frameworks/nextjs) and [environment variables](https://vercel.com/docs/projects/environment-variables).
