@@ -2,9 +2,20 @@ import OpenAI from "openai";
 import { ADVISOR_SYSTEM_PROMPT } from "@/lib/rules";
 import { isFinanceQuestion } from "@/lib/scope";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+/** Lazy init so `next build` does not require OPENAI_API_KEY (set it on Vercel for runtime). */
+let openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) {
+    throw new Error("Missing OPENAI_API_KEY");
+  }
+  if (!openai) {
+    openai = new OpenAI({ apiKey: key });
+  }
+  return openai;
+}
+
+export const dynamic = "force-dynamic";
 
 const MAX_MESSAGES = 60;
 
@@ -55,7 +66,17 @@ export async function POST(req: Request) {
     });
   }
 
-  const completion = await openai.chat.completions.create({
+  if (!process.env.OPENAI_API_KEY) {
+    return Response.json(
+      {
+        answer:
+          "Server misconfiguration: OPENAI_API_KEY is not set. Add it in Vercel → Project → Settings → Environment Variables.",
+      },
+      { status: 503 }
+    );
+  }
+
+  const completion = await getOpenAI().chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: ADVISOR_SYSTEM_PROMPT },
