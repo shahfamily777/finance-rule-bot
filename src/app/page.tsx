@@ -14,6 +14,35 @@ function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Parse /api/chat JSON or Vercel/Next error bodies; never show a useless generic "Request failed". */
+function extractAssistantText(raw: string, res: Response): string {
+  try {
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof data.answer === "string" && data.answer.length > 0) {
+      return data.answer;
+    }
+    if (typeof data.error === "string" && data.error.length > 0) {
+      return data.error;
+    }
+    const nested = data.error;
+    if (nested && typeof nested === "object" && nested !== null) {
+      const m = (nested as { message?: unknown }).message;
+      if (typeof m === "string" && m.length > 0) return m;
+    }
+    if (typeof data.message === "string" && data.message.length > 0) {
+      return data.message;
+    }
+  } catch {
+    /* not JSON */
+  }
+
+  const snippet = raw.replace(/\s+/g, " ").trim().slice(0, 400);
+  if (snippet.length > 0) {
+    return `HTTP ${res.status} ${res.statusText}: ${snippet}`;
+  }
+  return `HTTP ${res.status} ${res.statusText || "Error"} — no response body. If you just added OPENAI_API_KEY on Vercel, redeploy the project.`;
+}
+
 export default function Home() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -50,25 +79,26 @@ export default function Home() {
         body: JSON.stringify({ messages: threadPayload }),
       });
 
-      const data = (await res.json()) as { answer?: string };
-      if (!res.ok) {
-        throw new Error("Request failed");
-      }
+      const raw = await res.text();
+      const text = extractAssistantText(raw, res);
 
-      const answer =
-        typeof data.answer === "string" ? data.answer : "No answer returned.";
       setMessages((prev) => [
         ...prev,
-        { id: newId(), role: "assistant", content: answer },
+        { id: newId(), role: "assistant", content: text },
       ]);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong.";
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === "string"
+            ? e
+            : "Something went wrong.";
       setMessages((prev) => [
         ...prev,
         {
           id: newId(),
           role: "assistant",
-          content: `Could not get a response: ${msg}`,
+          content: `Could not reach the server: ${msg}. Check your connection and that the site finished deploying.`,
         },
       ]);
     } finally {
