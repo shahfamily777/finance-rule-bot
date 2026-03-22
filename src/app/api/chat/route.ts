@@ -1,15 +1,23 @@
 import OpenAI from "openai";
-import { getOpenAiApiKey } from "@/lib/openai-env";
 import { ADVISOR_SYSTEM_PROMPT } from "@/lib/rules";
 import { isFinanceQuestion } from "@/lib/scope";
 
-/** Lazy init so `next build` does not require an API key at import time. */
-let openai: OpenAI | null = null;
-async function getOpenAI(): Promise<OpenAI> {
-  const key = await getOpenAiApiKey();
-  if (!key) {
-    throw new Error("Missing OpenAI API key");
+/**
+ * Read the OpenAI API key directly from process.env at runtime.
+ * Checks multiple common env-var names so small naming mistakes
+ * on Vercel don't silently fail.
+ */
+function getApiKey(): string | undefined {
+  for (const name of ["OPENAI_API_KEY", "OPENAI_KEY", "OPEN_API_KEY"]) {
+    const v = process.env[name];
+    if (typeof v === "string" && v.trim().length > 0) return v.trim();
   }
+  return undefined;
+}
+
+/** Lazy-init so `next build` doesn't require a key at import time. */
+let openai: OpenAI | null = null;
+function getOpenAI(key: string): OpenAI {
   if (!openai) {
     openai = new OpenAI({ apiKey: key });
   }
@@ -19,10 +27,22 @@ async function getOpenAI(): Promise<OpenAI> {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/** GET /api/chat — quick check that the server sees your key (no secret values returned). */
+/**
+ * GET /api/chat — diagnostic endpoint.
+ * Returns whether the key is visible, which env-var names exist,
+ * and the runtime environment.  No secret values are leaked.
+ */
 export async function GET() {
+  const key = getApiKey();
+  const envNames = ["OPENAI_API_KEY", "OPENAI_KEY", "OPEN_API_KEY"];
+  const found = envNames.filter(
+    (n) => typeof process.env[n] === "string" && process.env[n]!.trim().length > 0
+  );
+
   return Response.json({
-    openAiKeyConfigured: Boolean(await getOpenAiApiKey()),
+    openAiKeyConfigured: Boolean(key),
+    keyLength: key ? key.length : 0,
+    envVarsFound: found,
     nodeEnv: process.env.NODE_ENV,
     vercel: process.env.VERCEL === "1",
   });
@@ -88,25 +108,32 @@ export async function POST(req: Request) {
 
     const userTurns = thread.filter((m) => m.role === "user");
     const firstUserContent = userTurns[0]?.content ?? "";
-    if (userTurns.length === 1 && !(await isFinanceQuestion(firstUserContent))) {
+    if (userTurns.length === 1 && !isFinanceQuestion(firstUserContent)) {
       return Response.json({
         answer:
           "This chatbot only answers personal finance questions. Try asking about saving, debt, retirement, or investing.",
       });
     }
 
-    if (!(await getOpenAiApiKey())) {
+    const key = getApiKey();
+    if (!key) {
+      console.error(
+        "[api/chat] No API key found. Env vars present:",
+        Object.keys(process.env).filter((k) =>
+          k.toLowerCase().includes("openai") || k.toLowerCase().includes("open_api")
+        )
+      );
       return Response.json(
         {
           answer:
-            "Server misconfiguration: no OpenAI API key found. In Vercel → Settings → Environment Variables, add a variable named exactly OPENAI_API_KEY (not OPEN_API_KEY or open_api_key) with your sk-… key, enable it for Production (and Preview if you use preview URLs), save, then Redeploy.",
+            "Server misconfiguration: no OpenAI API key found. In Vercel → Settings → Environment Variables, add a variable named exactly OPENAI_API_KEY with your sk-… key, enable it for Production (and Preview if you use preview URLs), save, then Redeploy.",
         },
         { status: 503 }
       );
     }
 
     try {
-      const completion = await (await getOpenAI()).chat.completions.create({
+      const completion = await getOpenAI(key).chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: ADVISOR_SYSTEM_PROMPT },
@@ -119,7 +146,7 @@ export async function POST(req: Request) {
 
       const answer =
         completion.choices[0].message.content?.trim() ||
-        "Sorry — I couldn’t generate a reply. Please try again.";
+        "Sorry — I couldn't generate a reply. Please try again.";
 
       return Response.json({ answer });
     } catch (err) {
