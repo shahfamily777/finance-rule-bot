@@ -1,6 +1,9 @@
+'use server';
 import OpenAI from "openai";
 import { ADVISOR_SYSTEM_PROMPT } from "@/lib/rules";
 import { isFinanceQuestion } from "@/lib/scope";
+import { handleConversationalFlow } from "@/lib/conversation";
+
 
 /**
  * Read the OpenAI API key directly from process.env at runtime.
@@ -115,8 +118,15 @@ export async function POST(req: Request) {
       });
     }
 
+        // Try deterministic conversational flow before calling the LLM
+    const quick = handleConversationalFlow(thread);
+    if (quick) {
+      return Response.json({ answer: quick });
+    }
+
     const key = getApiKey();
     if (!key) {
+
       console.error(
         "[api/chat] No API key found. Env vars present:",
         Object.keys(process.env).filter((k) =>
