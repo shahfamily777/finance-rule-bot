@@ -1,13 +1,14 @@
 import OpenAI from "openai";
+import { getOpenAiApiKey } from "@/lib/openai-env";
 import { ADVISOR_SYSTEM_PROMPT } from "@/lib/rules";
 import { isFinanceQuestion } from "@/lib/scope";
 
-/** Lazy init so `next build` does not require OPENAI_API_KEY (set it on Vercel for runtime). */
+/** Lazy init so `next build` does not require an API key at import time. */
 let openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
-  const key = process.env.OPENAI_API_KEY;
+  const key = getOpenAiApiKey();
   if (!key) {
-    throw new Error("Missing OPENAI_API_KEY");
+    throw new Error("Missing OpenAI API key");
   }
   if (!openai) {
     openai = new OpenAI({ apiKey: key });
@@ -16,6 +17,16 @@ function getOpenAI(): OpenAI {
 }
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+/** GET /api/chat — quick check that the server sees your key (no secret values returned). */
+export async function GET() {
+  return Response.json({
+    openAiKeyConfigured: Boolean(getOpenAiApiKey()),
+    nodeEnv: process.env.NODE_ENV,
+    vercel: process.env.VERCEL === "1",
+  });
+}
 
 const MAX_MESSAGES = 60;
 
@@ -84,11 +95,11 @@ export async function POST(req: Request) {
       });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    if (!getOpenAiApiKey()) {
       return Response.json(
         {
           answer:
-            "Server misconfiguration: OPENAI_API_KEY is not set. In Vercel: Project → Settings → Environment Variables → add OPENAI_API_KEY for Production, then Redeploy.",
+            "Server misconfiguration: no OpenAI API key found. In Vercel → Settings → Environment Variables, add a variable named exactly OPENAI_API_KEY (not OPEN_API_KEY or open_api_key) with your sk-… key, enable it for Production (and Preview if you use preview URLs), save, then Redeploy.",
         },
         { status: 503 }
       );
