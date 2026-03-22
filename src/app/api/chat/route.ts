@@ -5,8 +5,8 @@ import { isFinanceQuestion } from "@/lib/scope";
 
 /** Lazy init so `next build` does not require an API key at import time. */
 let openai: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  const key = getOpenAiApiKey();
+async function getOpenAI(): Promise<OpenAI> {
+  const key = await getOpenAiApiKey();
   if (!key) {
     throw new Error("Missing OpenAI API key");
   }
@@ -22,7 +22,7 @@ export const runtime = "nodejs";
 /** GET /api/chat — quick check that the server sees your key (no secret values returned). */
 export async function GET() {
   return Response.json({
-    openAiKeyConfigured: Boolean(getOpenAiApiKey()),
+    openAiKeyConfigured: Boolean(await getOpenAiApiKey()),
     nodeEnv: process.env.NODE_ENV,
     vercel: process.env.VERCEL === "1",
   });
@@ -88,14 +88,14 @@ export async function POST(req: Request) {
 
     const userTurns = thread.filter((m) => m.role === "user");
     const firstUserContent = userTurns[0]?.content ?? "";
-    if (userTurns.length === 1 && !isFinanceQuestion(firstUserContent)) {
+    if (userTurns.length === 1 && !(await isFinanceQuestion(firstUserContent))) {
       return Response.json({
         answer:
           "This chatbot only answers personal finance questions. Try asking about saving, debt, retirement, or investing.",
       });
     }
 
-    if (!getOpenAiApiKey()) {
+    if (!(await getOpenAiApiKey())) {
       return Response.json(
         {
           answer:
@@ -106,7 +106,7 @@ export async function POST(req: Request) {
     }
 
     try {
-      const completion = await getOpenAI().chat.completions.create({
+      const completion = await (await getOpenAI()).chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: ADVISOR_SYSTEM_PROMPT },

@@ -1,3 +1,5 @@
+"use server";
+
 /**
  * OpenAI API key from the environment.
  *
@@ -17,7 +19,7 @@ function pick(name: string): string | undefined {
   return undefined;
 }
 
-export function getOpenAiApiKey(): string | undefined {
+export async function getOpenAiApiKey(): Promise<string | undefined> {
   return (
     pick("OPENAI_API_KEY") ??
     pick("OPENAI_KEY") ??
