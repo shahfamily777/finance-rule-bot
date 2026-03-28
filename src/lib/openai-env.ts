@@ -1,3 +1,5 @@
+"use server";
+
 /**
  * OpenAI API key from the environment.
  *
