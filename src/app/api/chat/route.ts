@@ -1,5 +1,5 @@
-'use server';
 import OpenAI from "openai";
+
 import { ADVISOR_SYSTEM_PROMPT } from "@/lib/rules";
 import { isFinanceQuestion } from "@/lib/scope";
 import { handleConversationalFlow } from "@/lib/conversation";

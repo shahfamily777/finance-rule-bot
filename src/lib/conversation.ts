@@ -6,10 +6,20 @@
 export type Msg = { role: "user" | "assistant"; content: string };
 
 function parseAmount(message: string): number | null {
-  const m = message.replace(/,/g, "").match(/\$?\s*(\d{1,3}(?:\d{3})*|\d+)(?:\.(\d+))?/);
+  // Extract the first "money-like" amount.
+  // Supports: "$19,000", "19000", "19k", "19 k", "19K", "1.5m".
+  const cleaned = message.replace(/,/g, "");
+
+  const m = cleaned.match(/\$?\s*(\d+(?:\.\d+)?)(?:\s*(k|m|b)\b)?/i);
   if (!m) return null;
-  const n = Number(m[0].replace(/\$/g, "").trim());
-  return Number.isFinite(n) ? n : null;
+
+  const base = Number(m[1]);
+  if (!Number.isFinite(base)) return null;
+
+  const suffix = (m[2] || "").toLowerCase();
+  const multiplier = suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : suffix === "b" ? 1_000_000_000 : 1;
+
+  return base * multiplier;
 }
 
 function mentionsInvest(message: string): boolean {
