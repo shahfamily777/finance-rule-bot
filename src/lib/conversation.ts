@@ -1,15 +1,31 @@
 // Lightweight, deterministic conversational flow for the first few turns.
-// Goal: If user says e.g. "I have 10k to invest", ask one question at a time:
-// 1) Ask about high-interest debt (Yes/No). If Yes → advise payoff; if No →
-// 2) Ask about 401(k) employer match (Yes/No). Then optionally outline plan.
+// Goal: be conversational (one question at a time) BUT also understand when
+// the user provides multiple answers in one paragraph.
+//
+// Priority order for this quick flow:
+// 1) 401(k) match (free money)
+// 2) Starter emergency fund (~$2,000)
+// 3) High-interest debt
+// 4) Then investing
 
 export type Msg = { role: "user" | "assistant"; content: string };
 
-function parseAmount(message: string): number | null {
-  // Extract the first "money-like" amount.
-  // Supports: "$19,000", "19000", "19k", "19 k", "19K", "1.5m".
-  const cleaned = message.replace(/,/g, "");
+type Signals = {
+  investAmount: number | null;
+  debtAmount: number | null;
 
+  has401kMatch: boolean | null;
+  hasStarterEmergencyFund: boolean | null;
+
+  hasDebt: boolean | null;
+  highInterestDebt: boolean | null;
+};
+
+const STARTER_EF_TARGET = 2000;
+
+function parseAmountToken(raw: string): number | null {
+  // Supports: "$19,000", "19000", "19k", "19 k", "19K", "1.5m".
+  const cleaned = raw.replace(/,/g, "").trim();
   const m = cleaned.match(/\$?\s*(\d+(?:\.\d+)?)(?:\s*(k|m|b)\b)?/i);
   if (!m) return null;
 
@@ -17,22 +33,62 @@ function parseAmount(message: string): number | null {
   if (!Number.isFinite(base)) return null;
 
   const suffix = (m[2] || "").toLowerCase();
-  const multiplier = suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : suffix === "b" ? 1_000_000_000 : 1;
+  const multiplier =
+    suffix === "k"
+      ? 1_000
+      : suffix === "m"
+        ? 1_000_000
+        : suffix === "b"
+          ? 1_000_000_000
+          : 1;
 
   return base * multiplier;
 }
 
+function parseAmountNearKeyword(text: string, keywordPattern: string): number | null {
+  // Try: keyword ... amount
+  {
+    const re = new RegExp(
+      `${keywordPattern}[^\\d$]{0,30}(\\$?\\s*\\d[\\d,]*(?:\\.\\d+)?\\s*(?:k|m|b)?\\b)`,
+      "i"
+    );
+    const m = text.match(re);
+    if (m?.[1]) {
+      const n = parseAmountToken(m[1]);
+      if (n !== null) return n;
+    }
+  }
+
+  // Try: amount ... keyword
+  {
+    const re = new RegExp(
+      `(\\$?\\s*\\d[\\d,]*(?:\\.\\d+)?\\s*(?:k|m|b)?\\b)[^\\w]{0,20}${keywordPattern}`,
+      "i"
+    );
+    const m = text.match(re);
+    if (m?.[1]) {
+      const n = parseAmountToken(m[1]);
+      if (n !== null) return n;
+    }
+  }
+
+  return null;
+}
+
 function mentionsInvest(message: string): boolean {
-  return /(invest|put|save|stash|allocate|where should.*go)/i.test(message);
+  return /(invest|investing|investment|to invest|put\s+.*into|allocate|where should.*go)/i.test(
+    message
+  );
 }
 
 function parseYesNo(message: string): boolean | null {
   const m = message.trim().toLowerCase();
   if (["y", "yes", "yeah", "yep", "sure", "true"].includes(m)) return true;
   if (["n", "no", "nope", "false"].includes(m)) return false;
+
   // Heuristics for sentences
-  if (/\b(yes|yeah|yep|correct|do)\b/i.test(m)) return true;
-  if (/\b(no|nope|don\'t|do not|no debt|none)\b/i.test(m)) return false;
+  if (/\b(yes|yeah|yep|correct)\b/i.test(m)) return true;
+  if (/\b(no|nope|don\'t|do not|none)\b/i.test(m)) return false;
   return null;
 }
 
@@ -43,101 +99,170 @@ function lastAssistant(thread: Msg[]): string | null {
   return null;
 }
 
-// Canonical prompts we look for in the last assistant turn so we know what was asked.
-const ASK_DEBT_PROMPT = "do you have any high-interest debt";
-const ASK_401K_PROMPT = "do you have a 401(k) (or similar) with an employer match";
-const ASK_PLAN_PROMPT = "should i outline the step-by-step plan";
-const ASK_DEBT_PLAN_PROMPT = "would you like a quick payoff plan";
+function extractSignalsFromUserText(userText: string): Signals {
+  const investAmount = parseAmountNearKeyword(
+    userText,
+    "(invest|investing|to invest|investment)"
+  );
+  const debtAmount = parseAmountNearKeyword(
+    userText,
+    "(debt|owe|owed|credit\\s*card|cc\\b|loan)"
+  );
+
+  // 401k match
+  const saysHasMatch =
+    /((401\s*k|401k).{0,40}match|employer\s+match)/i.test(userText) &&
+    !/(no\s+match|doesn\'?t\s+match|without\s+match)/i.test(userText);
+  const saysNoMatch = /(no\s+match|doesn\'?t\s+match|without\s+match)/i.test(userText);
+  const has401kMatch: boolean | null = saysNoMatch ? false : saysHasMatch ? true : null;
+
+  // Starter emergency fund
+  const efAmount = parseAmountNearKeyword(
+    userText,
+    "(emergency\\s+fund|emergency\\s+savings|cash\\s+cushion)"
+  );
+  const saysNoEf = /(no\s+emergency\s+fund|don\'?t\s+have\s+an?\s+emergency\s+fund)/i.test(
+    userText
+  );
+  const saysHasEf =
+    /(emergency\s+fund|emergency\s+savings|cash\s+cushion)/i.test(userText) &&
+    !saysNoEf;
+
+  const hasStarterEmergencyFund: boolean | null =
+    saysNoEf
+      ? false
+      : efAmount !== null
+        ? efAmount >= STARTER_EF_TARGET
+        : saysHasEf
+          ? null // they mentioned it but didn't confirm amount >= target
+          : null;
+
+  // Debt yes/no
+  const saysNoDebt = /(\bno\s+debt\b|\bdebt[-\s]?free\b|\bwithout\s+debt\b)/i.test(
+    userText
+  );
+  const saysHasDebt =
+    /(\bdebt\b|\bowe\b|\bowed\b|credit\s*card|\bcc\b|loan)/i.test(userText) &&
+    !saysNoDebt;
+  const hasDebt: boolean | null = saysNoDebt ? false : saysHasDebt ? true : null;
+
+  // High-interest debt: explicit/heuristic
+  const mentionsHigh = /(high\s*interest|\bapr\b|\b\d{1,2}%\b|credit\s*card|\bcc\b|personal\s+loan)/i.test(
+    userText
+  );
+  const mentionsLow = /(low\s*interest|mortgage|student\s+loan|auto\s+loan|car\s+loan)/i.test(
+    userText
+  );
+
+  const highInterestDebt: boolean | null =
+    hasDebt === false ? false : mentionsHigh ? true : mentionsLow ? false : null;
+
+  return {
+    investAmount,
+    debtAmount,
+    has401kMatch,
+    hasStarterEmergencyFund,
+    hasDebt,
+    highInterestDebt,
+  };
+}
+
+const ASK_MATCH_PROMPT = "employer match";
+const ASK_STARTER_EF_PROMPT = "starter emergency fund";
+const ASK_HI_DEBT_PROMPT = "high-interest debt";
+
+function buildPlan(s: Signals): string {
+  const investText =
+    s.investAmount !== null ? `$${s.investAmount.toLocaleString()}` : "your money";
+
+  const lines: string[] = [];
+  lines.push(`Here’s the order I’d use for your ${investText}:`);
+
+  if (s.has401kMatch) {
+    lines.push(
+      "1) First: contribute enough to get the full 401(k) employer match (it’s free money)."
+    );
+  } else {
+    lines.push(
+      "1) If you have a workplace plan match, grab it first. If you don’t have a match, we’ll move on."
+    );
+  }
+
+  if (s.hasStarterEmergencyFund === false) {
+    lines.push(
+      `2) Next: set aside a starter emergency fund of about $${STARTER_EF_TARGET.toLocaleString()} in cash.`
+    );
+  } else {
+    lines.push(
+      `2) Keep at least about $${STARTER_EF_TARGET.toLocaleString()} set aside as a starter emergency fund.`
+    );
+  }
+
+  if (s.highInterestDebt) {
+    const debtText =
+      s.debtAmount !== null
+        ? `$${s.debtAmount.toLocaleString()}`
+        : "your high-interest debt";
+    lines.push(`3) Then: aggressively pay down ${debtText} before investing extra.`);
+    lines.push(
+      "4) After the high-interest debt is gone, we can invest the remaining long-term money in diversified low-cost index funds."
+    );
+  } else {
+    lines.push(
+      "3) If you don’t have high-interest debt, then you can invest the remaining long-term money in diversified low-cost index funds."
+    );
+  }
+
+  return lines.join("\n");
+}
 
 export function handleConversationalFlow(thread: Msg[]): string | null {
   if (!Array.isArray(thread) || thread.length === 0) return null;
 
   const last = thread[thread.length - 1];
-  const firstUser = thread.find((m) => m.role === "user");
-  const lastAssistantText = lastAssistant(thread)?.toLowerCase() || "";
+  const lastAssistantText = (lastAssistant(thread) || "").toLowerCase();
 
-  // Case A: New thread that looks like an "invest $X" intent → start with debt question.
-  if (
-    thread.length <= 2 &&
-    firstUser && firstUser.role === "user" &&
-    mentionsInvest(firstUser.content) &&
-    parseAmount(firstUser.content) !== null
-  ) {
-    // Only trigger if we haven't already asked the debt question.
-    if (!lastAssistantText.includes(ASK_DEBT_PROMPT)) {
-      const amt = parseAmount(firstUser.content)!;
-      return `Got it—you’re looking to invest about $${amt.toLocaleString()}. Before we do that, do you have any high-interest debt (like credit cards or personal loans)? Yes or No`;
+  const allUserText = thread
+    .filter((m) => m.role === "user")
+    .map((m) => m.content)
+    .join("\n");
+
+  if (!mentionsInvest(allUserText)) return null;
+
+  const signals = extractSignalsFromUserText(allUserText);
+  if (signals.investAmount === null) return null;
+
+  // If the last message is a simple Yes/No, interpret it based on what was asked.
+  const yn = last.role === "user" ? parseYesNo(last.content) : null;
+  const derived: Signals = { ...signals };
+
+  if (yn !== null) {
+    if (lastAssistantText.includes(ASK_MATCH_PROMPT)) {
+      derived.has401kMatch = yn;
+    } else if (lastAssistantText.includes(ASK_STARTER_EF_PROMPT)) {
+      derived.hasStarterEmergencyFund = yn;
+    } else if (lastAssistantText.includes(ASK_HI_DEBT_PROMPT)) {
+      derived.highInterestDebt = yn;
+      if (yn) derived.hasDebt = true;
     }
   }
 
-  // Case B: We just asked about debt → parse user's Yes/No and branch
-  if (lastAssistantText.includes(ASK_DEBT_PROMPT)) {
-    // The user's reply should be the last message
-    if (last.role !== "user") return null;
-    const yn = parseYesNo(last.content);
-    if (yn === null) {
-      return "Just to confirm—do you have any high-interest debt? Please answer Yes or No.";
-    }
-    if (yn) {
-      // Has high-interest debt
-      // Find original amount if available
-      const amt = firstUser ? parseAmount(firstUser.content) : null;
-      const amountText = amt ? `$${amt.toLocaleString()}` : "your available cash";
-      return `Because high-interest debt typically costs more than conservative investment returns, your best guaranteed return is to pay that down first. I recommend using ${amountText} toward your highest-interest balance.\n\nWould you like a quick payoff plan (e.g., avalanche vs. snowball) and how to automate payments? Yes or No`;
+  // Ask next missing question (one at a time)
+  if (derived.has401kMatch === null) {
+    return "Do you have a 401(k) (or similar) with an employer match? Yes or No";
+  }
+
+  if (derived.hasStarterEmergencyFund === null) {
+    return `Do you have at least about $${STARTER_EF_TARGET.toLocaleString()} set aside as a starter emergency fund? Yes or No`;
+  }
+
+  if (derived.highInterestDebt === null) {
+    if (derived.hasDebt === false) {
+      derived.highInterestDebt = false;
     } else {
-      // No high-interest debt → ask about 401k match
-      return "Great. Do you have a 401(k) (or similar) with an employer match? Yes or No";
+      return "Do you have any high-interest debt (like credit cards or personal loans)? Yes or No";
     }
   }
 
-  // Case C: We just asked about 401k match → parse user's Yes/No
-  if (lastAssistantText.includes(ASK_401K_PROMPT)) {
-    if (last.role !== "user") return null;
-    const yn = parseYesNo(last.content);
-    if (yn === null) {
-      return "Do you get an employer match on a 401(k) or similar? Yes or No";
-    }
-    const amt = firstUser ? parseAmount(firstUser.content) : null;
-    if (yn) {
-      return "Nice—capturing the full employer match is typically the best first move. We’ll allocate enough to get the full match, then discuss the next best place for the rest (e.g., IRA, brokerage). Would you like me to outline that step-by-step? Yes or No";
-    } else {
-      return "No problem—then we’ll look at IRA options and/or a taxable brokerage. Want me to outline a simple allocation and next steps? Yes or No";
-    }
-  }
-
-  // Case D: We just offered to outline the plan (401k path)
-  if (lastAssistantText.includes(ASK_PLAN_PROMPT)) {
-    if (last.role !== "user") return null;
-    const yn = parseYesNo(last.content);
-    if (yn === null) return "Should I outline the step-by-step investment plan? Yes or No";
-    if (yn) {
-      const amt = firstUser ? parseAmount(firstUser.content) : null;
-      const amountText = amt ? `$${amt.toLocaleString()}` : "your funds";
-      // We don't know whether they answered yes/no to match here; we can still provide a generic ordered plan.
-      return (
-        `Plan for ${amountText}:\n` +
-        "1) Contribute enough to your 401(k) to capture the full employer match (if offered).\n" +
-        "2) Fund an IRA (Roth or Traditional depending on eligibility and taxes).\n" +
-        "3) Put the remainder in a diversified low-cost index fund portfolio in a brokerage account.\n" +
-        "Ask me anytime to tailor this by timeline and risk tolerance."
-      );
-    } else {
-      return "Okay—whenever you want the step-by-step plan, say “show plan.”";
-    }
-  }
-
-  // Case E: We just offered a debt payoff plan
-  if (lastAssistantText.includes(ASK_DEBT_PLAN_PROMPT)) {
-    if (last.role !== "user") return null;
-    const yn = parseYesNo(last.content);
-    if (yn === null) return "Would you like a quick debt payoff plan? Yes or No";
-    if (yn) {
-      return "Okay—roughly how much do you owe and at what interest rates? You can list like: “$6k at 24%, $2.5k at 18%.”";
-    } else {
-      return "No problem. When the high-interest debt is paid off, we can build your investment plan next. Just say “ready to invest.”";
-    }
-  }
-
-  // Otherwise, fall back to model behavior
-  return null;
+  return buildPlan(derived);
 }
