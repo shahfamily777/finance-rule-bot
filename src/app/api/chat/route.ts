@@ -1,3 +1,5 @@
+
+
 import OpenAI from "openai";
 import { ADVISOR_SYSTEM_PROMPT } from "@/lib/rules";
 import { isFinanceQuestion } from "@/lib/scope";
