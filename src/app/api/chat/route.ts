@@ -1,10 +1,9 @@
-
-
 import OpenAI from "openai";
 
 import { ADVISOR_SYSTEM_PROMPT } from "@/lib/rules";
 import { isFinanceQuestion } from "@/lib/scope";
-import { handleConversationalFlow } from "@/lib/conversation";
+import { handleConversationalFlow, type ConversationState } from "@/lib/conversation";
+
 
 
 /**
@@ -120,11 +119,17 @@ export async function POST(req: Request) {
       });
     }
 
-        // Try deterministic conversational flow before calling the LLM
-    const quick = handleConversationalFlow(thread);
+            const incomingState: ConversationState | null =
+      body && typeof body === "object" && "state" in body
+        ? ((body as { state?: unknown }).state as ConversationState | null)
+        : null;
+
+    // Try deterministic conversational flow before calling the LLM
+    const quick = handleConversationalFlow(thread, incomingState);
     if (quick) {
-      return Response.json({ answer: quick });
+      return Response.json({ answer: quick.answer, state: quick.state });
     }
+
 
     const key = getApiKey();
     if (!key) {

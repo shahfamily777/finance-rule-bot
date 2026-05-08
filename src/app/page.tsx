@@ -47,6 +47,7 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [chatState, setChatState] = useState<unknown>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -76,10 +77,19 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ messages: threadPayload }),
+        body: JSON.stringify({ messages: threadPayload, state: chatState }),
       });
 
       const raw = await res.text();
+
+      // Capture server-side conversation state if provided (prevents loops when user answers "Yes/No").
+      try {
+        const data = JSON.parse(raw) as { state?: unknown };
+        if ("state" in data) setChatState(data.state ?? null);
+      } catch {
+        // ignore
+      }
+
       const text = extractAssistantText(raw, res);
 
       setMessages((prev) => [
