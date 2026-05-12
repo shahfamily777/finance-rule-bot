@@ -48,3 +48,5 @@ finance_rules_bot_template/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
