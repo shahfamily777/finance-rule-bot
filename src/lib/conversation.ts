@@ -34,7 +34,7 @@ export type ConversationState = {
   };
 };
 
-type PartialSignals = Partial<ConversatonState["data"]>;
+type PartialSignals = Partial<ConversationState["data"]>;
 
 type FlowResult = { answer: string; state: ConversationState };
 
