@@ -2,6 +2,7 @@ import { isFinanceQuestion } from "@/lib/scope";
 import { handleConversationalFlow, type ConversationState } from "@/lib/conversation";
 import {
   handleCarLoanFlow,
+  inferCarLoanFlowFromThread,
   isCarLoanFlowActive,
   type CarLoanConversationState,
 } from "@/lib/car-loan-flow";
@@ -132,7 +133,8 @@ export async function POST(req: Request) {
 
     const carState = incomingState as CarLoanConversationState | null;
     const mortgageState = incomingState as MortgageConversationState | null;
-    const inCarLoanFlow = isCarLoanFlowActive(carState);
+    const inCarLoanFlow =
+      isCarLoanFlowActive(carState) || inferCarLoanFlowFromThread(thread);
     const inMortgageFlow = isMortgageFlowActive(mortgageState);
 
     const scopeReject = checkTopicScope(lastUserContent, activeTopic, {
@@ -159,16 +161,6 @@ export async function POST(req: Request) {
       });
     }
 
-    const direct = tryDirectSectionAnswer(lastUserContent, activeTopic);
-    if (direct) {
-      return Response.json({
-        answer: direct.answer,
-        ...(direct.preserveState && incomingState != null
-          ? { state: incomingState }
-          : {}),
-      });
-    }
-
     const inActiveFlow =
       activeTopic === "car-loan"
         ? inCarLoanFlow
@@ -179,6 +171,36 @@ export async function POST(req: Request) {
                 typeof incomingState === "object" &&
                 "stage" in (incomingState as object)
             );
+
+    // Mid-checklist: flow handler owns term/number follow-ups (don't steal with a generic rule reply).
+    if (activeTopic === "car-loan" && inCarLoanFlow) {
+      const carQuick = handleCarLoanFlow(thread, carState, { forceTopic: true });
+      if (carQuick) {
+        return Response.json({ answer: carQuick.answer, state: carQuick.state });
+      }
+    }
+
+    if (activeTopic === "mortgage" && inMortgageFlow) {
+      const mortgageQuick = handleMortgageFlow(thread, mortgageState, {
+        forceTopic: true,
+      });
+      if (mortgageQuick) {
+        return Response.json({
+          answer: mortgageQuick.answer,
+          state: mortgageQuick.state,
+        });
+      }
+    }
+
+    const direct = tryDirectSectionAnswer(lastUserContent, activeTopic);
+    if (direct) {
+      return Response.json({
+        answer: direct.answer,
+        ...(direct.preserveState && incomingState != null
+          ? { state: incomingState }
+          : {}),
+      });
+    }
 
     if (!shouldRunGuidedIntake(lastUserContent, inActiveFlow)) {
       const unknown = getUnknownDomainReply(activeTopic);
@@ -195,7 +217,7 @@ export async function POST(req: Request) {
       }
       return Response.json({
         answer:
-          "This section only handles car loans under our three fixed rules (20% down, max 48-month term, ≤10% transportation). Share vehicle price, down payment, term, income, and monthly transport costs — or use **All topics** for Mortgage or Investment.",
+          "This section only handles car loans under our three fixed rules (20% down, max 48-month term, ≤10% transportation). Share vehicle price, down payment, term, income, APR, insurance, and gas or EV charging — or use **All topics** for Mortgage or Investment.",
         state: carState ?? undefined,
       });
     }

@@ -1,8 +1,8 @@
 // Lightweight, deterministic conversational flow.
-// Goal: ask ONE follow-up at a time in the priority order, but also infer
-// answers if the user provides them in one paragraph.
-//
+// Universal intake: parse everything the user gave, never re-ask filled fields.
 // IMPORTANT: We only output the full plan if the user explicitly asks for it.
+
+import { intakeAcknowledgment } from "@/lib/intake-policy";
 
 export type Msg = { role: "user" | "assistant"; content: string };
 
@@ -227,13 +227,30 @@ function mergeKnown(base: ConversationState["data"], next: PartialSignals): Conv
   return merged;
 }
 
+function investmentContextSummary(d: ConversationState["data"]): string[] {
+  const parts: string[] = [];
+  if (d.investAmount !== null) {
+    parts.push(`**$${d.investAmount.toLocaleString()}** to invest`);
+  }
+  if (d.has401kMatch === true) parts.push("401(k) match");
+  else if (d.has401kMatch === false) parts.push("no 401(k) match");
+  if (d.hasStarterEmergencyFund === true) parts.push("starter emergency fund");
+  if (d.hasHighInterestDebt === true) parts.push("high-interest debt");
+  else if (d.hasHighInterestDebt === false) parts.push("no high-interest debt");
+  return parts;
+}
+
 function nextQuestion(state: ConversationState, wantsPlan: boolean): FlowResult {
   const d = state.data;
+  const ack =
+    investmentContextSummary(d).length >= 2
+      ? intakeAcknowledgment(investmentContextSummary(d))
+      : "";
 
   // 1) match
   if (d.has401kMatch === null) {
     return {
-      answer: "Do you have a 401(k) (or similar) with an employer match?",
+      answer: `${ack}Do you have a 401(k) (or similar) with an employer match?`,
       state: { ...state, stage: "match" },
     };
   }
@@ -352,14 +369,16 @@ export function handleConversationalFlow(
   if (!mentionsInvest(allUserText)) return null;
 
   const state = initState(incomingState);
-  const extracted = extractSignalsFromText(allUserText);
-  state.data = mergeKnown(state.data, extracted);
+  state.data = mergeKnown(state.data, extractSignalsFromText(allUserText));
 
   // If user never mentioned an invest amount, don't take over.
   if (state.data.investAmount === null) return null;
 
   // Apply a Yes/No to the last asked question.
   const last = thread[thread.length - 1];
+  if (last?.role === "user") {
+    state.data = mergeKnown(state.data, extractSignalsFromText(last.content));
+  }
   const yn = last?.role === "user" ? parseYesNo(last.content) : null;
   if (yn !== null && state.stage) {
     if (state.stage === "match") state.data.has401kMatch = yn;
@@ -375,5 +394,5 @@ export function handleConversationalFlow(
   }
 
   const wantsPlan = userAsksForPlan(allUserText) || (state.stage === "plan_offer" && yn === true);
-  return nextQuestion(state, wantsPlan);
+  return nextQuestion({ ...state, stage: yn !== null ? state.stage : null }, wantsPlan);
 }

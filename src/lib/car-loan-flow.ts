@@ -1,6 +1,14 @@
 // Deterministic car-loan eligibility flow (20% down, ≤48 months, ≤10% transport).
 
-import { tryDirectSectionAnswer } from "@/lib/section-qa";
+import {
+  intakeAcknowledgment,
+  looksLikeBulkIntake,
+  parseAprPercent,
+  parseDownPaymentAmount,
+  parseGrossMonthlyIncome,
+  parsePurchasePrice,
+} from "@/lib/intake-policy";
+import { parseTermMonths, tryDirectSectionAnswer } from "@/lib/section-qa";
 
 export type Msg = { role: "user" | "assistant"; content: string };
 
@@ -13,10 +21,9 @@ export type CarLoanStage =
   | "down_payment"
   | "loan_term"
   | "gross_income"
-  | "car_payment"
+  | "interest_rate"
   | "insurance"
   | "fuel"
-  | "maintenance"
   | null;
 
 export type CarLoanConversationState = {
@@ -26,12 +33,17 @@ export type CarLoanConversationState = {
     downPayment: number | null;
     loanTermMonths: number | null;
     grossMonthlyIncome: number | null;
+    annualInterestRatePct: number | null;
+    /** Computed from price, down, term, and APR — not asked directly */
     monthlyCarPayment: number | null;
     monthlyInsurance: number | null;
+    /** Monthly gas or EV charging estimate */
     monthlyFuel: number | null;
-    monthlyMaintenance: number | null;
+    isEv: boolean | null;
     /** Set when user gives one combined transport figure */
     monthlyTransportTotal: number | null;
+    /** @deprecated Legacy field — no longer collected */
+    monthlyMaintenance?: number | null;
   };
 };
 
@@ -63,6 +75,66 @@ function parseFirstMoneyAmount(text: string): number | null {
   return parseAmountToken(m[0]);
 }
 
+function parseInterestRatePct(text: string, forStage = false): number | null {
+  const fromPolicy = parseAprPercent(text);
+  if (fromPolicy !== null) return fromPolicy;
+  if (forStage) {
+    const trimmed = text.trim();
+    if (/^\d+(?:\.\d+)?%?$/.test(trimmed)) {
+      const n = Number(trimmed.replace("%", ""));
+      if (n > 0 && n <= 30) return n;
+    }
+  }
+  return null;
+}
+
+/** Short income reply (e.g. "2k", "$6,000") when not a rate or term. */
+function parseIncomeShortReply(text: string): number | null {
+  if (/%/.test(text) || /\bmonths?\b/i.test(text) || /\byears?\b/i.test(text)) return null;
+  const trimmed = text.trim();
+  if (!/^[\d$,.\s]+(?:k|m|b)?$/i.test(trimmed)) return null;
+  const amt = parseAmountToken(trimmed);
+  if (amt === null || amt < 500 || amt > 2_000_000) return null;
+  return amt;
+}
+
+function loanPrincipal(d: CarLoanConversationState["data"]): number | null {
+  if (d.vehiclePrice === null || d.downPayment === null) return null;
+  const p = d.vehiclePrice - d.downPayment;
+  return p > 0 ? p : null;
+}
+
+/** Standard fixed-rate amortization: monthly payment from principal, APR, and term. */
+export function computeMonthlyLoanPayment(
+  principal: number,
+  annualRatePct: number,
+  termMonths: number
+): number {
+  if (principal <= 0 || termMonths <= 0) return 0;
+  if (annualRatePct <= 0) return principal / termMonths;
+  const r = annualRatePct / 100 / 12;
+  const factor = Math.pow(1 + r, termMonths);
+  return (principal * r * factor) / (factor - 1);
+}
+
+function tryComputeMonthlyPayment(d: CarLoanConversationState["data"]): void {
+  const principal = loanPrincipal(d);
+  if (
+    principal === null ||
+    d.loanTermMonths === null ||
+    d.annualInterestRatePct === null
+  ) {
+    return;
+  }
+  d.monthlyCarPayment = Math.round(
+    computeMonthlyLoanPayment(principal, d.annualInterestRatePct, d.loanTermMonths)
+  );
+}
+
+function detectsEv(text: string): boolean {
+  return /\b(ev|electric|bev|plug[-\s]?in|charging|tesla)\b/i.test(text);
+}
+
 function extractDownPaymentFromPercent(text: string, vehiclePrice: number | null): number | null {
   const m = text.match(
     /(?:have|got|with|i\s+have)\s+(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*%\s*(?:down|to\s+put\s+down)?/i
@@ -76,56 +148,31 @@ function extractDownPaymentFromPercent(text: string, vehiclePrice: number | null
 function extractCarLoanSignals(text: string): CarLoanPartial {
   const out: CarLoanPartial = {};
 
-  out.vehiclePrice =
-    firstAmount(
-      text,
-      /([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)\s*(?:car|vehicle|auto)\s*price/i
-    ) ??
-    firstAmount(
-      text,
-      /(?:car|vehicle|auto)\s*price\s*(?:is\s+|of\s+)?\$?\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i
-    ) ??
-    firstAmount(
-      text,
-      /(?:purchase\s*price|vehicle\s*price|car\s*(?:costs?|price|is)|buy(?:ing)?\s+(?:a\s+)?)\s*\$?\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i
-    ) ??
-    firstAmount(text, /\$\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)\s*(?:car|vehicle|suv|truck)/i) ??
-    (/(?:car|vehicle|auto)\s*price|\bcar\s*price/i.test(text)
-      ? parseFirstMoneyAmount(text)
-      : null);
+  out.vehiclePrice = parsePurchasePrice(text, "car");
 
-  const downPct = text.match(/(\d+(?:\.\d+)?)\s*%\s*(?:down|downpayment)/i);
-  if (downPct && out.vehiclePrice) {
-    out.downPayment = (out.vehiclePrice * Number(downPct[1])) / 100;
-  }
-  if (out.downPayment == null) {
-    out.downPayment =
-      firstAmount(text, /(?:down\s*payment|putting\s+down|down\s+of)\s*\$?\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i) ??
-      null;
-  }
+  out.downPayment = parseDownPaymentAmount(text, out.vehiclePrice ?? null);
   if (out.downPayment == null && out.vehiclePrice) {
     out.downPayment = extractDownPaymentFromPercent(text, out.vehiclePrice);
   }
 
-  const termMonths = text.match(/(\d+)\s*-?\s*month/i);
+  const termMonths = text.match(/(\d+)\s*-?\s*months?\b/i);
   if (termMonths) {
     const n = Number(termMonths[1]);
     if (Number.isFinite(n)) out.loanTermMonths = n;
   }
-  const termYears = text.match(/(\d+(?:\.\d+)?)\s*-?\s*year/i);
+  const termYears = text.match(/(\d+(?:\.\d+)?)\s*-?\s*years?\b/i);
   if (termYears && out.loanTermMonths === undefined) {
     const y = Number(termYears[1]);
     if (Number.isFinite(y)) out.loanTermMonths = Math.round(y * 12);
   }
-  if (/\b48\s*month|\b4\s*year\b/i.test(text) && out.loanTermMonths == null) {
+  if (/\b48\s*months?\b|\b4\s*years?\b/i.test(text) && out.loanTermMonths == null) {
     out.loanTermMonths = 48;
   }
 
-  out.grossMonthlyIncome =
-    firstAmount(
-      text,
-      /(?:(?:gross\s+)?(?:monthly\s+)?income|make\s+per\s+month|earn(?:ing)?)\s*(?:of\s+)?\$?\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i
-    ) ?? null;
+  out.grossMonthlyIncome = parseGrossMonthlyIncome(text);
+
+  const rateSig = parseInterestRatePct(text);
+  if (rateSig !== null) out.annualInterestRatePct = rateSig;
 
   out.monthlyCarPayment =
     firstAmount(
@@ -133,16 +180,15 @@ function extractCarLoanSignals(text: string): CarLoanPartial {
       /(?:car\s+)?(?:payment|note|loan\s+payment)\s*(?:of\s+)?\$?\s*([\d,]+(?:\.\d+)?)/i
     ) ?? null;
 
+  if (detectsEv(text)) out.isEv = true;
+
   out.monthlyInsurance =
     firstAmount(text, /(?:auto\s+)?insurance\s*(?:of\s+)?\$?\s*([\d,]+(?:\.\d+)?)/i) ?? null;
 
   out.monthlyFuel =
-    firstAmount(text, /(?:fuel|gas|gasoline)\s*(?:of\s+)?\$?\s*([\d,]+(?:\.\d+)?)/i) ?? null;
-
-  out.monthlyMaintenance =
     firstAmount(
       text,
-      /(?:maintenance|repairs?|service)\s*(?:of\s+)?\$?\s*([\d,]+(?:\.\d+)?)/i
+      /(?:fuel|gas|gasoline|charging|ev\s+energy)\s*(?:of\s+)?\$?\s*([\d,]+(?:\.\d+)?)/i
     ) ?? null;
 
   out.monthlyTransportTotal =
@@ -170,7 +216,22 @@ function mergeKnown(
 function initCarLoanState(
   incoming?: CarLoanConversationState | null
 ): CarLoanConversationState {
-  if (incoming && typeof incoming === "object" && incoming.data) return incoming;
+  if (incoming && typeof incoming === "object" && incoming.data) {
+    const legacyStage = incoming.stage as string | null;
+    const stage: CarLoanStage =
+      legacyStage === "car_payment"
+        ? "interest_rate"
+        : legacyStage === "maintenance"
+          ? "fuel"
+          : incoming.stage;
+    const data = {
+      ...incoming.data,
+      annualInterestRatePct: incoming.data.annualInterestRatePct ?? null,
+      isEv: incoming.data.isEv ?? null,
+    };
+    tryComputeMonthlyPayment(data);
+    return { ...incoming, stage, data };
+  }
   return {
     stage: null,
     data: {
@@ -178,10 +239,11 @@ function initCarLoanState(
       downPayment: null,
       loanTermMonths: null,
       grossMonthlyIncome: null,
+      annualInterestRatePct: null,
       monthlyCarPayment: null,
       monthlyInsurance: null,
       monthlyFuel: null,
-      monthlyMaintenance: null,
+      isEv: null,
       monthlyTransportTotal: null,
     },
   };
@@ -189,16 +251,16 @@ function initCarLoanState(
 
 function transportMonthly(d: CarLoanConversationState["data"]): number | null {
   if (d.monthlyTransportTotal !== null) return d.monthlyTransportTotal;
-  const parts = [
-    d.monthlyCarPayment,
-    d.monthlyInsurance,
-    d.monthlyFuel,
-    d.monthlyMaintenance,
-  ];
+  tryComputeMonthlyPayment(d);
+  const parts = [d.monthlyCarPayment, d.monthlyInsurance, d.monthlyFuel];
   if (parts.every((p) => p !== null)) {
     return parts.reduce((a, b) => a + (b ?? 0), 0);
   }
   return null;
+}
+
+function energyLabel(d: CarLoanConversationState["data"]): string {
+  return d.isEv ? "EV charging" : "gas";
 }
 
 function downPaymentPct(d: CarLoanConversationState["data"]): number | null {
@@ -241,13 +303,20 @@ function buildAssessment(state: CarLoanConversationState): FlowResult {
       }`
     );
   }
+  if (d.annualInterestRatePct !== null && d.monthlyCarPayment !== null) {
+    const principal = loanPrincipal(d);
+    lines.push(
+      `• Loan: ${d.annualInterestRatePct}% APR → **$${d.monthlyCarPayment.toLocaleString()}/mo** payment` +
+        (principal !== null ? ` on $${principal.toLocaleString()} borrowed` : "")
+    );
+  }
   if (transport !== null && transportPct !== null) {
     lines.push(
       `• Monthly transportation: $${transport.toLocaleString()} (${transportPct.toFixed(1)}% of gross income — cap ${MAX_TRANSPORT_PCT}%) → ${transportOk ? "✓ Pass" : "✗ Over cap"}`
     );
     if (d.monthlyTransportTotal === null) {
       lines.push(
-        `  (payment $${(d.monthlyCarPayment ?? 0).toLocaleString()} + insurance $${(d.monthlyInsurance ?? 0).toLocaleString()} + fuel $${(d.monthlyFuel ?? 0).toLocaleString()} + maintenance $${(d.monthlyMaintenance ?? 0).toLocaleString()})`
+        `  (loan $${(d.monthlyCarPayment ?? 0).toLocaleString()} + insurance $${(d.monthlyInsurance ?? 0).toLocaleString()} + ${energyLabel(d)} $${(d.monthlyFuel ?? 0).toLocaleString()})`
       );
     }
   }
@@ -282,7 +351,7 @@ function buildAssessment(state: CarLoanConversationState): FlowResult {
     }
     if (!transportOk) {
       lines.push(
-        `• Lower total transportation (payment + insurance + fuel + maintenance) to ≤${MAX_TRANSPORT_PCT}% of gross monthly income, or increase income / choose a cheaper car.`
+        `• Lower total transportation (loan payment + insurance + gas or EV charging) to ≤${MAX_TRANSPORT_PCT}% of gross monthly income, or increase income / choose a cheaper car.`
       );
     }
   }
@@ -290,8 +359,52 @@ function buildAssessment(state: CarLoanConversationState): FlowResult {
   return { answer: lines.join("\n"), state: { ...state, stage: null } };
 }
 
-function nextCarLoanQuestion(state: CarLoanConversationState): FlowResult {
+function syncAllUserSignals(
+  state: CarLoanConversationState,
+  thread: Msg[]
+): void {
+  const blob = thread
+    .filter((m) => m.role === "user")
+    .map((m) => m.content)
+    .join("\n");
+  state.data = mergeKnown(state.data, extractCarLoanSignals(blob));
+  tryComputeMonthlyPayment(state.data);
+}
+
+function carLoanContextSummary(d: CarLoanConversationState["data"]): string[] {
+  const parts: string[] = [];
+  if (d.vehiclePrice !== null) {
+    parts.push(`**$${d.vehiclePrice.toLocaleString()}** vehicle`);
+  }
+  if (d.downPayment !== null) {
+    const pct = downPaymentPct(d);
+    parts.push(
+      `**$${d.downPayment.toLocaleString()}** down` +
+        (pct !== null ? ` (${pct.toFixed(0)}%)` : "")
+    );
+  }
+  if (d.loanTermMonths !== null) {
+    parts.push(`**${d.loanTermMonths}**-month term`);
+  }
+  if (d.grossMonthlyIncome !== null) {
+    parts.push(`**$${d.grossMonthlyIncome.toLocaleString()}/mo** income`);
+  }
+  if (d.annualInterestRatePct !== null) {
+    parts.push(`**${d.annualInterestRatePct}%** APR`);
+  }
+  return parts;
+}
+
+function nextCarLoanQuestion(
+  state: CarLoanConversationState,
+  options?: { acknowledge?: boolean }
+): FlowResult {
   const d = state.data;
+  tryComputeMonthlyPayment(d);
+  const ack =
+    options?.acknowledge !== false && carLoanContextSummary(d).length >= 2
+      ? intakeAcknowledgment(carLoanContextSummary(d))
+      : "";
 
   if (d.vehiclePrice === null) {
     return {
@@ -302,60 +415,67 @@ function nextCarLoanQuestion(state: CarLoanConversationState): FlowResult {
   }
   if (d.downPayment === null) {
     return {
-      answer: `How much will you put down? (Target: at least ${MIN_DOWN_PCT}% = $${Math.ceil(d.vehiclePrice * (MIN_DOWN_PCT / 100)).toLocaleString()} on this price)`,
+      answer:
+        `${ack}How much will you put down? (Target: at least ${MIN_DOWN_PCT}% = $${Math.ceil(d.vehiclePrice * (MIN_DOWN_PCT / 100)).toLocaleString()} on this price)`,
       state: { ...state, stage: "down_payment" },
     };
   }
   if (d.loanTermMonths === null) {
+    const downPct = downPaymentPct(d);
+    const downNote =
+      downPct !== null
+        ? ` Down is ${downPct.toFixed(0)}% (${downPct >= MIN_DOWN_PCT ? "meets" : "below"} our **${MIN_DOWN_PCT}%** minimum).`
+        : "";
     return {
       answer:
-        "What loan term in months? Hard rule: maximum 48 months (4 years). We do not allow or advise longer terms — no exceptions.",
+        `${ack}What **loan term in months**? Hard rule: maximum **48 months (4 years)** — no exceptions.${downNote}`,
       state: { ...state, stage: "loan_term" },
     };
   }
   if (d.grossMonthlyIncome === null) {
-    const downPct = downPaymentPct(d);
-    let intro = "";
-    if (d.vehiclePrice !== null && d.downPayment !== null && downPct !== null) {
-      intro =
-        `Got it — **$${d.vehiclePrice.toLocaleString()}** car, **$${d.downPayment.toLocaleString()}** down (${downPct.toFixed(0)}%). ` +
-        `Your down payment ${downPct >= MIN_DOWN_PCT ? "meets" : "is below"} our **${MIN_DOWN_PCT}%** minimum. `;
-    } else if (d.vehiclePrice !== null) {
-      intro = `Got it — **$${d.vehiclePrice.toLocaleString()}** vehicle price. `;
-    }
     return {
       answer:
-        `${intro}To check if you can buy under our **20 / 48 / 10** rules (20% down, max **48-month** loan, total transport ≤**10%** of income), what is your **gross monthly income** (before taxes)?`,
+        `${ack}What is your **gross monthly income** (before taxes)? We use it for the **≤10%** transportation rule.`,
       state: { ...state, stage: "gross_income" },
     };
   }
 
+  tryComputeMonthlyPayment(d);
+
   const transport = transportMonthly(d);
   if (transport === null) {
-    if (d.monthlyTransportTotal === null && d.monthlyCarPayment === null) {
+    if (d.annualInterestRatePct === null && d.monthlyCarPayment === null) {
+      const principal = loanPrincipal(d);
+      const principalNote =
+        principal !== null
+          ? ` (amount financed ≈ **$${principal.toLocaleString()}** after your down payment)`
+          : "";
       return {
         answer:
-          "What is your expected monthly car payment (loan note)?",
-        state: { ...state, stage: "car_payment" },
+          `${ack}What **annual interest rate (APR %)** do you expect on the loan?${principalNote}\n\n` +
+          "We will calculate your monthly loan payment from price, down payment, term, and rate.",
+        state: { ...state, stage: "interest_rate" },
       };
     }
     if (d.monthlyInsurance === null) {
+      let intro = ack;
+      if (d.monthlyCarPayment !== null && d.annualInterestRatePct !== null) {
+        const principal = loanPrincipal(d);
+        intro =
+          `At **${d.annualInterestRatePct}%** APR over **${d.loanTermMonths}** months, estimated loan payment is **$${d.monthlyCarPayment.toLocaleString()}/mo**` +
+          (principal !== null ? ` ($${principal.toLocaleString()} financed).` : ".") +
+          "\n\n";
+      }
       return {
-        answer: "What is your expected monthly auto insurance?",
+        answer: `${intro}What is your expected monthly **auto insurance**?`,
         state: { ...state, stage: "insurance" },
       };
     }
     if (d.monthlyFuel === null) {
       return {
-        answer: "About how much per month for **fuel / gas**?",
-        state: { ...state, stage: "fuel" },
-      };
-    }
-    if (d.monthlyMaintenance === null) {
-      return {
         answer:
-          "About how much per month for maintenance/repairs? (Or say your total monthly transportation cost in one number.)",
-        state: { ...state, stage: "maintenance" },
+          `${ack}About how much per month for **gas**? If this is an **EV**, reply with your estimated monthly **charging** cost instead (e.g. \`$90 EV\`).`,
+        state: { ...state, stage: "fuel" },
       };
     }
   }
@@ -363,13 +483,117 @@ function nextCarLoanQuestion(state: CarLoanConversationState): FlowResult {
   return buildAssessment(state);
 }
 
+function isFlowContinuationMessage(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (/^(ok|okay|yes|yeah|y|nope|no|got it|i get it|sure|sounds good)\??\.?$/i.test(t)) {
+    return true;
+  }
+  return (
+    /^(ok|okay|yes|yeah|got it|i get it|sure|sounds good)[,.\s!?]/i.test(t) ||
+    /(?:going with|lets go with|make it|use|i'?ll do|switch to)/i.test(t) ||
+    /^\d/.test(t) ||
+    /\d+\s*(?:months?|years?)/i.test(t) ||
+    /^\d+(?:\.\d+)?\s*%$/.test(t)
+  );
+}
+
+function termTooLongReply(months: number, state: CarLoanConversationState): FlowResult {
+  return {
+    answer:
+      `**${months} months is too long** — our maximum is **48 months (4 years)**.\n\n` +
+      "Please reply with **48** or fewer months (e.g. `48 months`), then we'll continue with income and transportation costs.",
+    state: { ...state, stage: "loan_term", data: { ...state.data, loanTermMonths: months } },
+  };
+}
+
+function termAcceptedReply(state: CarLoanConversationState): FlowResult | null {
+  const d = state.data;
+  if (d.loanTermMonths === null || d.loanTermMonths > MAX_TERM_MONTHS) return null;
+  const next = nextCarLoanQuestion(state, { acknowledge: true });
+  return {
+    answer: `Got it — we'll use **${d.loanTermMonths} months** for the loan term.\n\n${next.answer}`,
+    state: next.state,
+  };
+}
+
+const MONEY_AMOUNT_STAGES: CarLoanStage[] = [
+  "vehicle_price",
+  "down_payment",
+  "gross_income",
+  "insurance",
+  "fuel",
+];
+
+const RATE_STAGE: CarLoanStage = "interest_rate";
+
+function isMoneyAmountStage(stage: CarLoanStage): boolean {
+  return stage !== null && MONEY_AMOUNT_STAGES.includes(stage);
+}
+
+function looksLikeTermAnswer(text: string, stage: CarLoanStage): boolean {
+  if (stage === "loan_term") return true;
+  if (/\d+\s*(?:months?|mo|years?)\b/i.test(text)) return true;
+  if (/(?:going with|let'?s go with|make it|use|switch to)\s*\d+/i.test(text)) return true;
+  return false;
+}
+
+/** Apply answers even when stage was cleared (e.g. after a rule Q&A reply). */
+function applyInferredFromMessage(
+  state: CarLoanConversationState,
+  userText: string
+): void {
+  state.data = mergeKnown(state.data, extractCarLoanSignals(userText));
+
+  const rate = parseInterestRatePct(userText, true);
+  if (rate !== null) {
+    state.data.annualInterestRatePct = rate;
+    tryComputeMonthlyPayment(state.data);
+    return;
+  }
+
+  if (
+    state.stage === "gross_income" ||
+    (state.data.grossMonthlyIncome === null && parseIncomeShortReply(userText) !== null)
+  ) {
+    const inc = parseIncomeShortReply(userText);
+    if (inc !== null) {
+      state.data.grossMonthlyIncome = inc;
+      return;
+    }
+  }
+
+  if (state.stage === RATE_STAGE) {
+    applyStageAnswer(state, userText);
+    return;
+  }
+
+  if (isMoneyAmountStage(state.stage)) {
+    applyStageAnswer(state, userText);
+    return;
+  }
+
+  if (state.stage === "loan_term") {
+    applyStageAnswer(state, userText);
+    return;
+  }
+
+  if (looksLikeBulkIntake(userText)) {
+    return;
+  }
+
+  if (state.stage) {
+    applyStageAnswer(state, userText);
+  }
+}
+
 function applyStageAnswer(
   state: CarLoanConversationState,
   userText: string
 ): void {
   const amt = parseAmountToken(userText) ?? firstAmount(userText, /([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i);
-  const termM = userText.match(/(\d+)\s*-?\s*month/i);
-  const termY = userText.match(/(\d+(?:\.\d+)?)\s*-?\s*year/i);
+  const termM = userText.match(/(\d+)\s*-?\s*months?/i);
+  const termY = userText.match(/(\d+(?:\.\d+)?)\s*-?\s*years?/i);
 
   switch (state.stage) {
     case "vehicle_price":
@@ -387,24 +611,51 @@ function applyStageAnswer(
     case "gross_income":
       if (amt !== null) state.data.grossMonthlyIncome = amt;
       break;
-    case "car_payment":
-      if (amt !== null) state.data.monthlyCarPayment = amt;
+    case "interest_rate": {
+      const rate = parseInterestRatePct(userText, true);
+      if (rate !== null) {
+        state.data.annualInterestRatePct = rate;
+        tryComputeMonthlyPayment(state.data);
+      }
       break;
+    }
     case "insurance":
       if (amt !== null) state.data.monthlyInsurance = amt;
       break;
     case "fuel":
-      if (amt !== null) state.data.monthlyFuel = amt;
-      break;
-    case "maintenance":
+      if (detectsEv(userText)) state.data.isEv = true;
+      else if (/\b(gas|gasoline|petrol)\b/i.test(userText)) state.data.isEv = false;
       if (amt !== null) {
         if (/transport/i.test(userText)) state.data.monthlyTransportTotal = amt;
-        else state.data.monthlyMaintenance = amt;
+        else state.data.monthlyFuel = amt;
       }
       break;
     default:
       break;
   }
+}
+
+/** When client state is missing, infer checklist from recent assistant prompts. */
+export function inferCarLoanFlowFromThread(thread: Msg[]): boolean {
+  const lastAssistant = [...thread].reverse().find((m) => m.role === "assistant");
+  if (
+    lastAssistant &&
+    /(?:vehicle purchase price|put down|loan term in months|gross monthly income|interest rate|APR|auto insurance|gas|EV|charging|transportation)/i.test(
+      lastAssistant.content
+    )
+  ) {
+    return true;
+  }
+  const userBlob = thread
+    .filter((m) => m.role === "user")
+    .map((m) => m.content)
+    .join("\n");
+  const partial = extractCarLoanSignals(userBlob);
+  return (
+    partial.vehiclePrice != null ||
+    partial.downPayment != null ||
+    partial.loanTermMonths != null
+  );
 }
 
 export function isCarLoanFlowActive(
@@ -418,6 +669,7 @@ export function isCarLoanFlowActive(
     d.downPayment !== null ||
     d.loanTermMonths !== null ||
     d.grossMonthlyIncome !== null ||
+    d.annualInterestRatePct !== null ||
     d.monthlyCarPayment !== null ||
     d.monthlyTransportTotal !== null
   );
@@ -443,29 +695,64 @@ export function handleCarLoanFlow(
   if (!options?.forceTopic && !mentionsCarLoan(allUserText)) return null;
 
   const state = initCarLoanState(incomingState);
+  syncAllUserSignals(state, thread);
 
   const last = thread[thread.length - 1];
+  const active = isCarLoanFlowActive(state);
+  let continuation = false;
+
   if (last?.role === "user") {
-    const direct = tryDirectSectionAnswer(last.content, "car-loan");
-    if (direct) {
-      return { answer: direct.answer, state: { ...state, stage: null } };
+    continuation = active && isFlowContinuationMessage(last.content);
+
+    const bulk =
+      looksLikeBulkIntake(last.content) || carLoanContextSummary(state.data).length >= 2;
+
+    if (!continuation && !bulk) {
+      const direct = tryDirectSectionAnswer(last.content, "car-loan");
+      if (direct) {
+        return {
+          answer: direct.answer,
+          state: { ...state, stage: state.stage, data: state.data },
+        };
+      }
     }
-  }
 
-  state.data = mergeKnown(state.data, extractCarLoanSignals(allUserText));
+    const stageBefore = state.stage;
+    applyInferredFromMessage(state, last.content);
+    syncAllUserSignals(state, thread);
 
-  if (last?.role === "user" && state.stage) {
-    applyStageAnswer(state, last.content);
-    state.data = mergeKnown(state.data, extractCarLoanSignals(last.content));
+    const termReply = looksLikeTermAnswer(last.content, stageBefore);
+
+    if (
+      termReply &&
+      state.data.loanTermMonths !== null &&
+      state.data.loanTermMonths > MAX_TERM_MONTHS
+    ) {
+      return termTooLongReply(state.data.loanTermMonths, state);
+    }
+
+    if (
+      termReply &&
+      state.data.loanTermMonths !== null &&
+      state.data.loanTermMonths <= MAX_TERM_MONTHS &&
+      continuation &&
+      state.data.grossMonthlyIncome === null
+    ) {
+      const accepted = termAcceptedReply(state);
+      if (accepted) return accepted;
+    }
   }
 
   // If user gave enough numbers in one message, assess instead of asking from step 1
   const dAfter = state.data;
+  tryComputeMonthlyPayment(dAfter);
+
   const hasFullPicture =
     dAfter.vehiclePrice !== null &&
     dAfter.downPayment !== null &&
     dAfter.loanTermMonths !== null &&
     dAfter.grossMonthlyIncome !== null &&
+    (dAfter.annualInterestRatePct !== null || dAfter.monthlyCarPayment !== null) &&
     transportMonthly(dAfter) !== null;
   if (hasFullPicture) {
     return buildAssessment(state);
@@ -482,5 +769,12 @@ export function handleCarLoanFlow(
 
   if (!options?.forceTopic && !hasAny && !state.stage) return null;
 
-  return nextCarLoanQuestion(state);
+  const softOk =
+    last?.role === "user" &&
+    /^(ok|okay|yes|sure)\??\.?$/i.test(last.content.trim()) &&
+    state.data.annualInterestRatePct !== null;
+
+  return nextCarLoanQuestion(state, {
+    acknowledge: !softOk && !continuation,
+  });
 }

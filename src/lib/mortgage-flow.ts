@@ -1,3 +1,10 @@
+import {
+  intakeAcknowledgment,
+  parseAprPercent,
+  parseDownPaymentAmount,
+  parseGrossMonthlyIncome,
+  parsePurchasePrice,
+} from "@/lib/intake-policy";
 import { MORTGAGE_RULES } from "@/lib/mortgage-rules";
 import { tryDirectSectionAnswer } from "@/lib/section-qa";
 
@@ -87,34 +94,9 @@ function extractMortgageSignals(text: string): MortgagePartial {
   )
     out.isRefinance = false;
 
-  out.homePrice =
-    firstAmount(
-      text,
-      /([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)\s*(?:purchase\s*price|home\s*price|house\s*price|asking\s*price)/i
-    ) ??
-    firstAmount(
-      text,
-      /(?:purchase\s*price|home\s*price|house\s*price|price)\s*(?:is\s+|of\s+)?\$?\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i
-    ) ??
-    (/(?:purchase\s*price|home\s*price|house\s*price|\d+\s*k\b)/i.test(text)
-      ? parseFirstMoneyAmount(text)
-      : null);
-
-  out.grossMonthlyIncome =
-    firstAmount(
-      text,
-      /(?:(?:gross\s+)?(?:monthly\s+)?income|make\s+per\s+month|earn)\s*(?:is\s+)?\$?\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i
-    ) ?? null;
-
-  const downPct = text.match(/(\d+(?:\.\d+)?)\s*%\s*(?:down|downpayment)/i);
-  if (downPct && out.homePrice) {
-    out.downPayment = (out.homePrice * Number(downPct[1])) / 100;
-  }
-  if (out.downPayment == null) {
-    out.downPayment =
-      firstAmount(text, /(?:down\s*payment|putting\s+down)\s*\$?\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i) ??
-      null;
-  }
+  out.homePrice = parsePurchasePrice(text, "home");
+  out.grossMonthlyIncome = parseGrossMonthlyIncome(text);
+  out.downPayment = parseDownPaymentAmount(text, out.homePrice ?? null);
 
   out.closingCosts =
     firstAmount(text, /(?:closing\s*costs?)\s*\$?\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i) ?? null;
@@ -133,10 +115,7 @@ function extractMortgageSignals(text: string): MortgagePartial {
   if (term15) out.loanTermYears = 15;
   if (term30) out.loanTermYears = 30;
 
-  out.interestRatePct =
-    parsePercent(text, /(?:interest\s*rate|mortgage\s*rate|rate)\s*(?:of\s+|at\s+|is\s+)?(\d+(?:\.\d+)?)\s*%/i) ??
-    parsePercent(text, /(\d+(?:\.\d+)?)\s*%\s*(?:interest|apr|fixed)/i) ??
-    null;
+  out.interestRatePct = parseAprPercent(text);
 
   out.monthlyPropertyTax =
     firstAmount(text, /(?:property\s*tax|taxes)\s*\$?\s*([\d,]+(?:\.\d+)?)/i) ??
@@ -436,8 +415,24 @@ function contextualPrompt(
   return { answer, state: { ...state, stage } };
 }
 
+function mortgageContextSummary(d: MortgageConversationState["data"]): string[] {
+  const parts: string[] = [];
+  if (d.homePrice !== null) parts.push(`**$${d.homePrice.toLocaleString()}** home`);
+  if (d.grossMonthlyIncome !== null) {
+    parts.push(`**$${d.grossMonthlyIncome.toLocaleString()}/mo** income`);
+  }
+  if (d.downPayment !== null) parts.push(`**$${d.downPayment.toLocaleString()}** down`);
+  if (d.interestRatePct !== null) parts.push(`**${d.interestRatePct}%** rate`);
+  if (d.loanTermYears !== null) parts.push(`**${d.loanTermYears}-year** term`);
+  return parts;
+}
+
 function nextMortgageQuestion(state: MortgageConversationState): FlowResult {
   const d = state.data;
+  const ack =
+    mortgageContextSummary(d).length >= 2
+      ? intakeAcknowledgment(mortgageContextSummary(d))
+      : "";
 
   if (d.isRefinance === null) {
     if (d.homePrice !== null) {
@@ -482,10 +477,9 @@ function nextMortgageQuestion(state: MortgageConversationState): FlowResult {
   }
 
   if (d.grossMonthlyIncome === null) {
-    const priceNote = `Got it — **$${d.homePrice.toLocaleString()}** purchase price.\n\n`;
     return contextualPrompt(
       state,
-      `${priceNote}What is your **gross monthly income** (before taxes)?`,
+      `${ack}What is your **gross monthly income** (before taxes)?`,
       "gross_income"
     );
   }
@@ -494,7 +488,7 @@ function nextMortgageQuestion(state: MortgageConversationState): FlowResult {
     const need = Math.ceil(d.homePrice! * (R.MIN_DOWN_PAYMENT_PCT / 100));
     return contextualPrompt(
       state,
-      `How much will you put **down**? (Minimum ${R.MIN_DOWN_PAYMENT_PCT}% = about $${need.toLocaleString()} on this home)`,
+      `${ack}How much will you put **down**? (Minimum ${R.MIN_DOWN_PAYMENT_PCT}% = about $${need.toLocaleString()} on this home)`,
       "down_payment"
     );
   }
@@ -649,24 +643,31 @@ export function handleMortgageFlow(
     .join("\n");
 
   const state = initMortgageState(incomingState);
+  state.data = mergeKnown(state.data, extractMortgageSignals(allUserText));
 
   const last = thread[thread.length - 1];
-  if (last?.role === "user") {
-    const direct = tryDirectSectionAnswer(last.content, "mortgage");
-    if (direct) {
-      return { answer: direct.answer, state: { ...state, stage: null } };
-    }
-  }
-
-  state.data = mergeKnown(state.data, extractMortgageSignals(allUserText));
 
   if (options?.forceTopic && state.data.isRefinance === null && state.data.homePrice !== null) {
     state.data.isRefinance = false;
   }
 
-  if (last?.role === "user" && state.stage) {
-    applyStageAnswer(state, last.content);
+  if (last?.role === "user") {
+    const bulk = /,/.test(last.content) && mortgageContextSummary(state.data).length >= 2;
+    if (!bulk) {
+      const direct = tryDirectSectionAnswer(last.content, "mortgage");
+      if (direct) {
+        return {
+          answer: direct.answer,
+          state: { ...state, stage: state.stage, data: state.data },
+        };
+      }
+    }
+
     state.data = mergeKnown(state.data, extractMortgageSignals(last.content));
+    if (state.stage) {
+      applyStageAnswer(state, last.content);
+      state.data = mergeKnown(state.data, extractMortgageSignals(last.content));
+    }
   }
 
   if (!options?.forceTopic) {
@@ -675,5 +676,5 @@ export function handleMortgageFlow(
       return null;
   }
 
-  return nextMortgageQuestion(state);
+  return nextMortgageQuestion({ ...state, stage: null });
 }

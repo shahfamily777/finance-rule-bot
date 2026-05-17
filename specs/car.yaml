@@ -1,0 +1,99 @@
+# Car loan module — edit this file to change rules, questions, and copy.
+# Run: npm run specs:compile  (also runs automatically before npm run build)
+
+id: car-loan
+
+meta:
+  label: Car loan
+  blurb: Affordability, rates, refinance
+  hub_intro: |
+    Car loan only. Ask rule questions directly (e.g. “Is 72 months too long?”) or share your numbers for a checklist.
+    Fixed rules: ≥{min_down_payment_pct}% down · max {max_loan_term_months} months · transport ≤{max_transport_pct_of_gross}% of income.
+    Other topics → All topics.
+
+intake:
+  policy:
+    - Parse ALL fields the user gives in one message or across the thread.
+    - Never re-ask for a field that is already filled.
+    - Ask only the next missing field, or run the checklist when enough is known.
+    - Acknowledge what you understood when the user provides several numbers at once.
+  field_order:
+    - vehicle_price
+    - down_payment
+    - loan_term_months
+    - gross_monthly_income
+    - annual_interest_rate_pct
+    - monthly_insurance
+    - monthly_fuel_or_ev
+
+fields:
+  vehicle_price:
+    stage: vehicle_price
+    question: What is the vehicle purchase price? (e.g. $32,000)
+  down_payment:
+    stage: down_payment
+    question: How much will you put down? (Target at least {min_down_payment_pct}% = ${min_down_on_price} on this price)
+  loan_term_months:
+    stage: loan_term
+    question: What loan term in months? Hard rule — maximum {max_loan_term_months} months ({max_loan_term_years} years). No exceptions.
+  gross_monthly_income:
+    stage: gross_income
+    question: What is your gross monthly income (before taxes)? We use it for the ≤{max_transport_pct_of_gross}% transportation rule.
+  annual_interest_rate_pct:
+    stage: interest_rate
+    question: What annual interest rate (APR %) do you expect on the loan? We calculate the monthly payment from price, down, term, and rate.
+  monthly_insurance:
+    stage: insurance
+    question: What is your expected monthly auto insurance?
+  monthly_fuel_or_ev:
+    stage: fuel
+    question: About how much per month for gas? If this is an EV, reply with your estimated monthly charging cost instead (e.g. `$90 EV`).
+
+rules:
+  min_down_payment_pct: 20
+  max_loan_term_months: 48
+  max_loan_term_years: 4
+  max_transport_pct_of_gross: 10
+  max_apr_pct: 30
+  no_term_exceptions: true
+
+transport:
+  components:
+    - loan_payment_computed
+    - insurance
+    - fuel_or_ev_charging
+  excluded:
+    - maintenance
+    - repairs
+
+loan_payment:
+  method: amortization
+  inputs:
+    - vehicle_price
+    - down_payment
+    - loan_term_months
+    - annual_interest_rate_pct
+
+rules_summary: |
+  Car loan rules (fixed):
+  1) Down payment: at least {min_down_payment_pct}% of the vehicle price.
+  2) Loan term: {max_loan_term_months} months ({max_loan_term_years} years) maximum — no exceptions. Not 60, not 72.
+  3) Transportation: loan payment + insurance + gas or EV charging ≤ {max_transport_pct_of_gross}% of gross monthly income.
+
+direct_answers:
+  term_too_long: |
+    Yes — **{months} months is too long** for a car loan here.
+    Our hard maximum is **{max_loan_term_months} months ({max_loan_term_years} years)**. We do not use 60-, 72-, or longer terms.
+    Use **{max_loan_term_months} months or less**, or buy a cheaper car / put more down / wait.
+  term_max_ok: |
+    **{max_loan_term_months} months ({max_loan_term_years} years)** is our maximum allowed car loan term — acceptable. Shorter is fine; do not go beyond {max_loan_term_months}.
+  term_exception_denied: |
+    No — we do not allow or recommend car loans longer than **{max_loan_term_months} months ({max_loan_term_years} years)** under any circumstance.
+  down_payment_rule: |
+    Put down **at least {min_down_payment_pct}%** of the vehicle purchase price to reduce upside-down risk.
+  transport_rule: |
+    Keep total monthly transportation — loan payment + insurance + gas or EV charging — at or below **{max_transport_pct_of_gross}% of gross monthly income**.
+
+assessment:
+  pass_all: You meet all three fixed rules ({min_down_payment_pct}% down, ≤{max_loan_term_months}-month term, ≤{max_transport_pct_of_gross}% transportation).
+  note_fixed: These three rules are fixed — especially the {max_loan_term_months}-month maximum. There is no exception path.

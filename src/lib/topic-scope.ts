@@ -61,8 +61,11 @@ function mentionsInvestmentFinance(text: string): boolean {
 function looksLikeFlowAnswer(text: string): boolean {
   const t = text.trim();
   if (/^(y|yes|no|nope|yeah|n|ok|okay)\.?$/i.test(t)) return true;
+  if (/^(ok|okay|yes|got it|i get it|sounds good|sure)[,.\s]/i.test(t)) return true;
+  if (/(?:going with|let'?s go with|make it|use|i'?ll do|switch to)\s*\d+/i.test(t)) return true;
   if (/^\$?[\d,]+(?:\.\d+)?(?:\s*(?:k|m|b))?\s*(?:months?|years?)?\.?$/i.test(t)) return true;
   if (/\d+\s*(?:month|year)/i.test(t) && t.length < 80) return true;
+  if (/^\d{1,3}$/.test(t)) return true;
   return false;
 }
 
@@ -111,6 +114,42 @@ export function checkTopicScope(
   if (!trimmed) return null;
 
   if (inFlow && looksLikeFlowAnswer(trimmed)) return null;
+
+  // Mid checklist: keep context unless clearly another section or off-topic
+  if (inFlow) {
+    if (currentTopic === "car-loan" && mentionsMortgage(trimmed)) {
+      return {
+        message: `That question is about **${SECTION_NAMES.mortgage}**, not car loans. Go back to **All topics** and open **${SECTION_NAMES.mortgage}**.`,
+        preserveState: true,
+      };
+    }
+    if (currentTopic === "car-loan" && mentionsInvestmentFinance(trimmed)) {
+      return {
+        message: `That is a **personal finance / investment** question. Go back to **All topics** and open **${SECTION_NAMES.investment}**.`,
+        preserveState: true,
+      };
+    }
+    if (currentTopic === "mortgage" && mentionsCarLoan(trimmed) && !mentionsMortgage(trimmed)) {
+      return {
+        message: `That belongs in **${SECTION_NAMES["car-loan"]}**. Open **All topics** → **Car loan**.`,
+        preserveState: true,
+      };
+    }
+    if (currentTopic === "mortgage" && mentionsInvestmentFinance(trimmed)) {
+      return {
+        message: `That belongs in **${SECTION_NAMES.investment}**. Open **All topics** → **Investment**.`,
+        preserveState: true,
+      };
+    }
+    if (isClearlyOffTopic(trimmed)) {
+      return {
+        message:
+          "We do not answer that. Use **Car loan**, **Mortgage**, or **Investment** from **All topics**.",
+        preserveState: true,
+      };
+    }
+    return null;
+  }
 
   if (relatesToCurrentSection(trimmed, currentTopic)) return null;
 

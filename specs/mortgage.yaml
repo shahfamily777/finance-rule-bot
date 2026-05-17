@@ -1,0 +1,101 @@
+# Mortgage module — edit this file to change rules, questions, and copy.
+# Run: npm run specs:compile
+
+id: mortgage
+
+meta:
+  label: Mortgage
+  blurb: Down payment, refi, monthly cost
+  hub_intro: |
+    Mortgage only. Start with purchase price (e.g. 500k) — we'll ask income, down payment, cash readiness, rate,
+    then check housing ≤{max_housing_pct_of_gross}% of gross income (PITI + tax + insurance + HOA/repairs).
+    Other topics → All topics.
+
+intake:
+  policy:
+    - Parse ALL fields the user gives; never re-ask filled fields.
+    - Ask only the next missing field, or run the assessment when enough is known.
+    - Acknowledge bundled numbers when the user provides several at once.
+  purchase_field_order:
+    - home_price
+    - gross_monthly_income
+    - down_payment
+    - emergency_fund
+    - closing_costs
+    - cash_available
+    - interest_rate_pct
+    - loan_term_years
+    - monthly_property_tax
+    - monthly_insurance
+    - monthly_hoa_maintenance
+  refinance_field_order:
+    - current_rate_pct
+    - new_rate_pct
+    - loan_term_years
+
+fields:
+  scenario:
+    question: Are you buying a home or refinancing? (If you share a purchase price, we assume buying.)
+  home_price:
+    question: What is the home purchase price? (e.g. $500,000 or 500k)
+  gross_monthly_income:
+    question: What is your gross monthly income (before taxes)?
+  down_payment:
+    question: How much will you put down? (Minimum {min_down_payment_pct}% = about ${min_down_on_price} on this home)
+  emergency_fund:
+    question: How much will you keep in an emergency fund after closing? (Separate from down payment — must stay funded.)
+  closing_costs:
+    question: Estimated closing costs? (If unsure, many buyers use ~{estimated_closing_cost_pct}% of price ≈ ${estimated_closing}.)
+  cash_available:
+    question: Do you have enough cash on hand for down + closing + emergency fund combined? (Need about ${cash_needed_total} — not borrowed.)
+  interest_rate_pct:
+    question: What mortgage interest rate do you expect? (e.g. 6.25%)
+  loan_term_years:
+    question: Loan term — 15 or 30 years? (Only these two fit our rules.)
+  monthly_property_tax:
+    question: What are monthly property taxes? (Or say “estimate”.)
+  monthly_insurance:
+    question: What is monthly homeowners insurance? (Or say “estimate”.)
+  monthly_hoa_maintenance:
+    question: Monthly HOA + maintenance/repairs? (Or say “estimate” — we use ~{hidden_cost_pct_default}% of mortgage+tax+insurance for hidden costs.)
+  current_rate_pct:
+    question: What is your current mortgage rate? (e.g. 6.5%)
+  new_rate_pct:
+    question: What new rate are you offered? (We refinance at ≥{refinance_rate_drop_min_pct} point lower.)
+
+rules:
+  min_down_payment_pct: 20
+  preferred_loan_terms_years: [15, 30]
+  refinance_rate_drop_min_pct: 1
+  high_rate_extra_payoff_pct: 5
+  max_housing_pct_of_gross: 35
+  hidden_cost_pct_low: 5
+  hidden_cost_pct_high: 10
+  hidden_cost_pct_default: 7.5
+  estimated_closing_cost_pct: 3
+  require_emergency_fund_before_buy: true
+  rent_if_not_ready: true
+
+readiness:
+  required_cash_components:
+    - down_payment
+    - closing_costs
+    - emergency_fund
+
+rules_summary: |
+  Mortgage rules in this app:
+  • {loan_terms_label} loan only
+  • Refinance when rate drops ≥{refinance_rate_drop_min_pct}%
+  • Before buying: {min_down_payment_pct}% down + closing costs + emergency fund in cash (else keep renting)
+  • Extra payoff encouraged when rate >{high_rate_extra_payoff_pct}%
+  • Total housing ≤ {max_housing_pct_of_gross}% of gross monthly income (PITI + tax + insurance + ~{hidden_cost_pct_low}–{hidden_cost_pct_high}% hidden)
+
+direct_answers:
+  loan_terms_invalid: We only use 15- or 30-year mortgages here — not 40-year or other terms.
+  refinance_rule: Refinance when the new rate is at least {refinance_rate_drop_min_pct} percentage point lower than your current rate.
+  housing_cap: Total monthly housing must stay at or below {max_housing_pct_of_gross}% of gross monthly income.
+  rent_instead: You need {min_down_payment_pct}% down + closing costs + a funded emergency fund before buying. Otherwise keep renting.
+
+assessment:
+  housing_over_cap: Housing cost must be ≤{max_housing_pct_of_gross}% of gross income — lower price, increase income, put more down, or keep renting.
+  refi_wait: Do not refinance yet — rate improvement is under {refinance_rate_drop_min_pct} point.

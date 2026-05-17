@@ -1,0 +1,80 @@
+# Investment / personal finance module — edit priority order and questions here.
+# Run: npm run specs:compile
+
+id: investment
+
+meta:
+  label: Investment
+  blurb: Guided money order & investing
+  hub_intro: |
+    Investment mode: the assistant may ask follow-ups (match, emergency fund, debt, HSA, Roth, 401(k)) before a full plan.
+
+intake:
+  policy:
+    - Parse ALL signals from the user's message before asking anything.
+    - Never re-ask what they already stated.
+    - Ask one targeted question at a time for missing items only.
+    - Give the full priority plan when they ask or when enough context is collected.
+
+constants:
+  starter_emergency_fund_target: 2000
+  full_emergency_months_min: 3
+
+priority_order:
+  - step: 1
+    key: MATCH_401K
+    summary: First, contribute enough to your employer 401(k) to get the full employer match — it's free money / an immediate return.
+  - step: 2
+    key: STARTER_EMERGENCY
+    summary: Build a small starter emergency cushion (aim ~ $2,000) if you don't have one yet.
+  - step: 3
+    key: DEBT_FIRST
+    summary: Pay down high-interest debt (e.g. credit cards) before investing extra (after the 401(k) match + starter emergency fund).
+  - step: 4
+    key: FULL_EMERGENCY
+    summary: Grow emergency savings to roughly 3–6 months of essential expenses in safe, accessible cash.
+  - step: 5
+    key: HSA_PRIORITY
+    summary: If eligible (e.g. high-deductible health plan), consider prioritizing HSA contributions for triple tax advantages.
+  - step: 6
+    key: ROTH_NEXT
+    summary: Consider Roth IRA (or Backdoor Roth if income limits apply) after earlier bases are covered.
+  - step: 7
+    key: MAX_RETIREMENT
+    summary: Increase 401(k) / workplace plan contributions toward annual limits after Roth and other priorities.
+  - step: 8
+    key: BROKERAGE_INVESTING
+    summary: Invest remaining long-term money in a taxable brokerage using diversified, low-cost index funds.
+
+questions:
+  match:
+    stage: match
+    question: Do you have a 401(k) (or similar) with an employer match?
+  starter_emergency:
+    stage: starter_emergency
+    question: Do you have at least about ${starter_emergency_fund_target} set aside as an emergency fund?
+  high_interest_debt:
+    stage: high_interest_debt
+    question: Do you have any high-interest debt (like credit cards or personal loans)?
+  full_emergency:
+    stage: full_emergency
+    question: Do you have a fully funded emergency fund (about 3–6 months of expenses)?
+  hsa:
+    stage: hsa
+    question: Are you eligible to contribute to an HSA (high-deductible health plan / HDHP)?
+  roth:
+    stage: roth
+    question: Do you already contribute to a Roth IRA (or plan to this year)?
+  max_401k:
+    stage: max_401k
+    question: Are you already maxing out your 401(k) contributions (hitting the annual limit)?
+
+rules_summary: |
+  Personal finance priority order in this section — follow steps in order; do not skip earlier steps unless clearly already done.
+
+direct_answers:
+  priority_intro: "Personal finance priority order in this section:"
+
+messages:
+  enough_context: I've got enough info. If you want, ask “give me the full plan” and I'll summarize the step-by-step order for your money.
+  plan_prompt: give me the full plan

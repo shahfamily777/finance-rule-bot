@@ -110,14 +110,25 @@ function mentionsInvestmentExplicit(text: string): boolean {
   );
 }
 
-function parseTermMonths(text: string): number | null {
+export function parseTermMonths(
+  text: string,
+  options?: { allowBareNumber?: boolean }
+): number | null {
   const m = text.match(/\b(\d+)\s*[-\s]?(?:months?|mo)\b/i);
   if (m) return Number(m[1]);
-  const y = text.match(/\b(\d+)\s*[-\s]?years?\b/i);
-  if (y) return Number(y[1]) * 12;
-  if (/\b(60|72|84|96)\b/.test(text)) {
-    const n = text.match(/\b(60|72|84|96)\b/);
+  const y = text.match(/\b(\d+(?:\.\d+)?)\s*[-\s]?years?\b/i);
+  if (y) return Math.round(Number(y[1]) * 12);
+  const goWith = text.match(
+    /(?:going with|let'?s go with|make it|use|switch to)\s*(\d+)\s*(?:months?|mo)?\b/i
+  );
+  if (goWith) return Number(goWith[1]);
+  if (/\b(60|72|84|96|48)\b/.test(text)) {
+    const n = text.match(/\b(60|72|84|96|48)\b/);
     if (n) return Number(n[1]);
+  }
+  if (options?.allowBareNumber && /^\s*(\d{1,3})\s*$/i.test(text.trim())) {
+    const n = Number(text.trim());
+    if (n >= 12 && n <= 120) return n;
   }
   return null;
 }
@@ -161,10 +172,13 @@ export function isIntakeDataMessage(text: string, inActiveFlow: boolean): boolea
     return false;
   if (inActiveFlow) {
     if (/^(y|yes|no|nope|yeah|n|ok|okay)\.?$/i.test(t)) return true;
+    if (/^(ok|okay|yes|got it|i get it|sounds good)[,.\s!]*/i.test(t)) return true;
+    if (/(?:going with|let'?s go with|make it|use|i'?ll do)\s*\d+/i.test(t)) return true;
     if (/^\$?[\d,]+/.test(t) && !/too\s+long/i.test(t)) return true;
     if (
       /^\d+\s*[-\s]?(?:months?|years?|mo)\b\.?$/i.test(t) ||
-      (/^\d+\s*[-\s]?(?:months?|mo)\b/i.test(t) && t.length < 30)
+      (/^\d+\s*[-\s]?(?:months?|mo)\b/i.test(t) && t.length < 40) ||
+      /^\d{1,3}\s*years?\b/i.test(t)
     )
       return true;
   }
@@ -248,7 +262,7 @@ function answerCarLoanDirect(text: string): DirectAnswer | null {
         "Car loan rules (fixed):\n\n" +
         "1) **Down payment:** at least **20%** of the vehicle price (avoids owing more than the car is worth).\n" +
         "2) **Loan term:** **48 months (4 years) maximum** — no exceptions. Not 60, not 72.\n" +
-        "3) **Transportation budget:** payment + insurance + fuel + maintenance ≤ **10%** of gross monthly income.\n\n" +
+        "3) **Transportation budget:** loan payment (from APR) + insurance + gas or EV charging ≤ **10%** of gross monthly income.\n\n" +
         "Share your numbers anytime for a full checklist, or ask a specific question (e.g. “Is 72 months too long?”).",
       preserveState: true,
     };
@@ -288,7 +302,7 @@ function answerCarLoanDirect(text: string): DirectAnswer | null {
   if (/10\s*%|ten\s+percent|transportation/i.test(t) && /income|afford|rule/i.test(t)) {
     return {
       answer:
-        "Keep **total monthly transportation** — car payment + insurance + fuel + maintenance — at or below **10% of gross monthly income** (before taxes). Above that, the car is likely more than you should finance.",
+        "Keep **total monthly transportation** — loan payment + insurance + gas or EV charging — at or below **10% of gross monthly income** (before taxes). We calculate the loan payment from your APR; we do not ask for maintenance on new cars.",
       preserveState: true,
     };
   }
