@@ -14,7 +14,6 @@ import {
   getUnknownDomainReply,
   isIntakeDataMessage,
   isUserAskingQuestion,
-  relatesToSection,
   shouldRunGuidedIntake,
   tryDirectSectionAnswer,
 } from "@/lib/section-qa";

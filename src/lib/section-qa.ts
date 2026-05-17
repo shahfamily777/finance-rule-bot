@@ -23,21 +23,33 @@ export function relatesToCarLoanSection(text: string): boolean {
   if (mentionsInvestmentExplicit(text) && !/(car|auto|vehicle|transport)/i.test(text))
     return false;
 
+  const hasCarNoun = /(?:\bcar\b|\bauto\b|\bvehicle\b|suv|truck)/i.test(text);
+
   return (
+    /(?:car|auto|vehicle)\s*price|price\s+of\s+(?:the\s+)?(?:car|vehicle)/i.test(text) ||
+    (hasCarNoun && /\$?\s*[\d,]+(?:\.\d+)?\s*(?:k|m|b)?/i.test(text)) ||
+    (hasCarNoun && /can\s+i\s+buy|should\s+i\s+buy|afford/i.test(text)) ||
     /\b(72|60|84|96|48|36)\s*[-\s]?(?:months?|mo)\b/i.test(text) ||
     /loan\s+term|financing\s+term|how\s+long\s+(?:should|can)|too\s+long/i.test(text) ||
-    /down\s+payment|\d+\s*%\s*down|twenty\s+percent\s+down|20\s*%\s+down/i.test(text) ||
-    /transportation|transport\s+cost|10\s*%\s+of\s+(?:my\s+)?income/i.test(text) ||
+    /down\s+payment|(?:have|got|with)\s+\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*%\s*(?:down)?/i.test(text) ||
+    /transportation|transport\s+cost|10\s*%\s+of\s+(?:my\s+)?income|fuel|gas\b|insurance/i.test(text) ||
     /upside\s+down|depreciat/i.test(text) ||
-    /(?:car|auto|vehicle).{0,25}(?:loan|payment|financ|afford)/i.test(text) ||
+    /(?:car|auto|vehicle).{0,25}(?:loan|payment|financ|afford|buy)/i.test(text) ||
     /(?:loan|payment|financ).{0,25}(?:car|auto|vehicle)/i.test(text) ||
     /(?:what\s+are\s+(?:the\s+)?rules|your\s+rules|eligibility)/i.test(text)
   );
 }
 
+/** In car-loan section: price / % down / “can I buy” are on-topic. */
+export function isCarLoanContextMessage(text: string): boolean {
+  return relatesToCarLoanSection(text);
+}
+
 export function relatesToMortgageSection(text: string): boolean {
   if (mentionsMortgageExplicit(text)) return true;
   if (mentionsCarLoanExplicit(text) && !mentionsMortgageExplicit(text)) return false;
+  if (/(?:\bcar\b|\bauto\b|\bvehicle\b|suv|truck)/i.test(text) && !/(home|house|mortgage)/i.test(text))
+    return false;
 
   return (
     /purchase\s*price|home\s*price|house\s*price|asking\s*price/i.test(text) ||
@@ -141,10 +153,11 @@ export function isUserAskingQuestion(text: string): boolean {
 export function isIntakeDataMessage(text: string, inActiveFlow: boolean): boolean {
   const t = text.trim();
   if (!t) return false;
-  if (isCarLoanRuleQuestion(t)) return false;
+  if (isCarLoanRuleQuestion(t) && !isCarLoanContextMessage(t)) return false;
+  if (isCarLoanContextMessage(t)) return true;
   if (isMortgageContextMessage(t) && /\$?\s*[\d,]+/.test(t) && !isUserAskingQuestion(t))
     return true;
-  if (isUserAskingQuestion(t) && !isMortgageContextMessage(t) && !isCarLoanRuleQuestion(t))
+  if (isUserAskingQuestion(t) && !isMortgageContextMessage(t) && !isCarLoanContextMessage(t))
     return false;
   if (inActiveFlow) {
     if (/^(y|yes|no|nope|yeah|n|ok|okay)\.?$/i.test(t)) return true;
@@ -466,6 +479,7 @@ export function shouldRunGuidedIntake(
   inActiveFlow: boolean
 ): boolean {
   if (isIntakeDataMessage(text, inActiveFlow)) return true;
+  if (isCarLoanContextMessage(text) || isMortgageContextMessage(text)) return true;
   if (isUserAskingQuestion(text)) return false;
   return true;
 }

@@ -20,13 +20,13 @@ const SECTION_NAMES: Record<TopicId, string> = {
 
 function mentionsMortgage(text: string): boolean {
   if (/(car|auto|vehicle|suv|truck)/i.test(text)) return false;
-  return /(mortgage|home\s+loan|house\s+loan|\bpmi\b|refinanc\w*\s+(?:my\s+)?home|buy(?:ing)?\s+a\s+house|home\s+purchase|down\s+payment\s+on\s+(?:a\s+)?house|property\s+tax|escrow)/i.test(
+  return /(mortgage|home\s+loan|house\s+loan|\bpmi\b|refinanc\w*\s+(?:my\s+)?home|buy(?:ing)?\s+a\s+house|home\s+purchase|down\s+payment\s+on\s+(?:a\s+)?house|property\s+tax|escrow|home\s*price|house\s*price)/i.test(
     text
   );
 }
 
 function mentionsCarLoan(text: string): boolean {
-  return /(car\s+loan|auto\s+loan|vehicle\s+loan|financ(?:e|ing)\s+a\s+car|buy(?:ing)?\s+a\s+car|new\s+car|used\s+car|auto\s+insurance|car\s+note|car\s+payment|transportation\s+(?:cost|expense)|vehicle\s+price|car\s+price)/i.test(
+  return /(car\s+loan|auto\s+loan|vehicle\s+loan|financ(?:e|ing)\s+a\s+car|buy(?:ing)?\s+a\s+car|new\s+car|used\s+car|auto\s+insurance|car\s+note|car\s+payment|transportation\s+(?:cost|expense)|vehicle\s+price|car\s+price|(?:car|vehicle)\s*price)/i.test(
     text
   );
 }

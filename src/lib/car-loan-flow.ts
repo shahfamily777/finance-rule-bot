@@ -57,28 +57,54 @@ function firstAmount(text: string, pattern: RegExp): number | null {
   return parseAmountToken(m[1]);
 }
 
+function parseFirstMoneyAmount(text: string): number | null {
+  const m = text.match(/\$?\s*([\d,]+(?:\.\d+)?)\s*(k|m|b)?/i);
+  if (!m) return null;
+  return parseAmountToken(m[0]);
+}
+
+function extractDownPaymentFromPercent(text: string, vehiclePrice: number | null): number | null {
+  const m = text.match(
+    /(?:have|got|with|i\s+have)\s+(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*%\s*(?:down|to\s+put\s+down)?/i
+  );
+  if (!m || vehiclePrice === null) return null;
+  const pct = Number(m[1] || m[2]);
+  if (!Number.isFinite(pct) || pct < 5 || pct > 100) return null;
+  return (vehiclePrice * pct) / 100;
+}
+
 function extractCarLoanSignals(text: string): CarLoanPartial {
   const out: CarLoanPartial = {};
 
   out.vehiclePrice =
     firstAmount(
       text,
+      /([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)\s*(?:car|vehicle|auto)\s*price/i
+    ) ??
+    firstAmount(
+      text,
+      /(?:car|vehicle|auto)\s*price\s*(?:is\s+|of\s+)?\$?\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i
+    ) ??
+    firstAmount(
+      text,
       /(?:purchase\s*price|vehicle\s*price|car\s*(?:costs?|price|is)|buy(?:ing)?\s+(?:a\s+)?)\s*\$?\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i
     ) ??
     firstAmount(text, /\$\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)\s*(?:car|vehicle|suv|truck)/i) ??
-    null;
+    (/(?:car|vehicle|auto)\s*price|\bcar\s*price/i.test(text)
+      ? parseFirstMoneyAmount(text)
+      : null);
 
   const downPct = text.match(/(\d+(?:\.\d+)?)\s*%\s*(?:down|downpayment)/i);
-  if (downPct) {
-    const pct = Number(downPct[1]);
-    if (Number.isFinite(pct) && out.vehiclePrice) {
-      out.downPayment = (out.vehiclePrice * pct) / 100;
-    }
+  if (downPct && out.vehiclePrice) {
+    out.downPayment = (out.vehiclePrice * Number(downPct[1])) / 100;
   }
-  if (out.downPayment === undefined || out.downPayment === null) {
+  if (out.downPayment == null) {
     out.downPayment =
       firstAmount(text, /(?:down\s*payment|putting\s+down|down\s+of)\s*\$?\s*([\d,]+(?:\.\d+)?\s*(?:k|m|b)?)/i) ??
       null;
+  }
+  if (out.downPayment == null && out.vehiclePrice) {
+    out.downPayment = extractDownPaymentFromPercent(text, out.vehiclePrice);
   }
 
   const termMonths = text.match(/(\d+)\s*-?\s*month/i);
@@ -288,8 +314,18 @@ function nextCarLoanQuestion(state: CarLoanConversationState): FlowResult {
     };
   }
   if (d.grossMonthlyIncome === null) {
+    const downPct = downPaymentPct(d);
+    let intro = "";
+    if (d.vehiclePrice !== null && d.downPayment !== null && downPct !== null) {
+      intro =
+        `Got it — **$${d.vehiclePrice.toLocaleString()}** car, **$${d.downPayment.toLocaleString()}** down (${downPct.toFixed(0)}%). ` +
+        `Your down payment ${downPct >= MIN_DOWN_PCT ? "meets" : "is below"} our **${MIN_DOWN_PCT}%** minimum. `;
+    } else if (d.vehiclePrice !== null) {
+      intro = `Got it — **$${d.vehiclePrice.toLocaleString()}** vehicle price. `;
+    }
     return {
-      answer: "What is your gross monthly income (before taxes)?",
+      answer:
+        `${intro}To check if you can buy under our **20 / 48 / 10** rules (20% down, max **48-month** loan, total transport ≤**10%** of income), what is your **gross monthly income** (before taxes)?`,
       state: { ...state, stage: "gross_income" },
     };
   }
@@ -311,7 +347,7 @@ function nextCarLoanQuestion(state: CarLoanConversationState): FlowResult {
     }
     if (d.monthlyFuel === null) {
       return {
-        answer: "About how much per month for fuel/gas?",
+        answer: "About how much per month for **fuel / gas**?",
         state: { ...state, stage: "fuel" },
       };
     }
