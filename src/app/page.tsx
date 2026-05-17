@@ -333,8 +333,25 @@ export default function Home() {
                 )}
                 {view === "car-loan" && (
                   <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-800">
-                    Car loan Q&A — we&apos;ll add more guided steps soon. Ask
-                    about rates, term, or what you can afford.
+                    <strong>Car loan only.</strong> Ask rule questions directly
+                    (e.g. “Is 72 months too long?”) or share your numbers for a
+                    checklist. Fixed rules: ≥20% down · max 48 months · transport
+                    ≤10% of income. Other topics → <strong>All topics</strong>.
+                  </p>
+                )}
+                {view === "mortgage" && (
+                  <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-800">
+                    <strong>Mortgage only.</strong> Start with purchase price (e.g.
+                    500k) — we&apos;ll ask income, down payment, cash readiness, rate,
+                    then check housing ≤35% of gross income (PITI + tax + insurance +
+                    HOA/repairs). Other topics → <strong>All topics</strong>.
+                  </p>
+                )}
+                {view === "investment" && (
+                  <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-800">
+                    <strong>Personal finance / investment only.</strong> Car loans
+                    and mortgages → use <strong>All topics</strong>. Other
+                    subjects are not answered.
                   </p>
                 )}
                 {view === "mortgage" && (

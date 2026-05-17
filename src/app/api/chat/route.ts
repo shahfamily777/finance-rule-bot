@@ -1,16 +1,28 @@
-import OpenAI from "openai";
-
-import { ADVISOR_SYSTEM_PROMPT } from "@/lib/rules";
 import { isFinanceQuestion } from "@/lib/scope";
 import { handleConversationalFlow, type ConversationState } from "@/lib/conversation";
+import {
+  handleCarLoanFlow,
+  isCarLoanFlowActive,
+  type CarLoanConversationState,
+} from "@/lib/car-loan-flow";
+import {
+  handleMortgageFlow,
+  isMortgageFlowActive,
+  type MortgageConversationState,
+} from "@/lib/mortgage-flow";
+import {
+  getUnknownDomainReply,
+  isIntakeDataMessage,
+  isUserAskingQuestion,
+  relatesToSection,
+  shouldRunGuidedIntake,
+  tryDirectSectionAnswer,
+} from "@/lib/section-qa";
+import { checkTopicScope, type TopicId } from "@/lib/topic-scope";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-
-/**
- * Read the OpenAI API key directly from process.env at runtime.
- * Checks multiple common env-var names so small naming mistakes
- * on Vercel don't silently fail.
- */
 function getApiKey(): string | undefined {
   for (const name of ["OPENAI_API_KEY", "OPENAI_KEY", "OPEN_API_KEY"]) {
     const v = process.env[name];
@@ -18,18 +30,6 @@ function getApiKey(): string | undefined {
   }
   return undefined;
 }
-
-/** Lazy-init so `next build` doesn't require a key at import time. */
-let openai: OpenAI | null = null;
-function getOpenAI(key: string): OpenAI {
-  if (!openai) {
-    openai = new OpenAI({ apiKey: key });
-  }
-  return openai;
-}
-
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
 
 /**
  * GET /api/chat — diagnostic endpoint.
@@ -110,73 +110,140 @@ export async function POST(req: Request) {
       return Response.json({ answer: "Please enter a message." });
     }
 
-    const userTurns = thread.filter((m) => m.role === "user");
-    const firstUserContent = userTurns[0]?.content ?? "";
-    if (userTurns.length === 1 && !isFinanceQuestion(firstUserContent)) {
-      return Response.json({
-        answer:
-          "This chatbot only answers personal finance questions. Try asking about saving, debt, retirement, or investing.",
-      });
-    }
-
-            const incomingState: ConversationState | null =
-      body && typeof body === "object" && "state" in body
-        ? ((body as { state?: unknown }).state as ConversationState | null)
+    const topic =
+      body &&
+      typeof body === "object" &&
+      "topic" in body &&
+      typeof (body as { topic: unknown }).topic === "string"
+        ? (body as { topic: string }).topic
         : null;
 
-    // Try deterministic conversational flow before calling the LLM
-    const quick = handleConversationalFlow(thread, incomingState);
-    if (quick) {
-      return Response.json({ answer: quick.answer, state: quick.state });
-    }
+    const userTurns = thread.filter((m) => m.role === "user");
+    const lastUserContent = userTurns[userTurns.length - 1]?.content ?? "";
+    const firstUserContent = userTurns[0]?.content ?? "";
+    const activeTopic: TopicId =
+      topic === "car-loan" || topic === "mortgage" || topic === "investment"
+        ? topic
+        : "investment";
 
+    const incomingState =
+      body && typeof body === "object" && "state" in body
+        ? (body as { state?: unknown }).state
+        : null;
 
-    const key = getApiKey();
-    if (!key) {
+    const carState = incomingState as CarLoanConversationState | null;
+    const mortgageState = incomingState as MortgageConversationState | null;
+    const inCarLoanFlow = isCarLoanFlowActive(carState);
+    const inMortgageFlow = isMortgageFlowActive(mortgageState);
 
-      console.error(
-        "[api/chat] No API key found. Env vars present:",
-        Object.keys(process.env).filter((k) =>
-          k.toLowerCase().includes("openai") || k.toLowerCase().includes("open_api")
-        )
-      );
-      return Response.json(
-        {
-          answer:
-            "Server misconfiguration: no OpenAI API key found. In Vercel → Settings → Environment Variables, add a variable named exactly OPENAI_API_KEY with your sk-… key, enable it for Production (and Preview if you use preview URLs), save, then Redeploy.",
-        },
-        { status: 503 }
-      );
-    }
+    const scopeReject = checkTopicScope(lastUserContent, activeTopic, {
+      inActiveFlow:
+        activeTopic === "car-loan"
+          ? inCarLoanFlow
+          : activeTopic === "mortgage"
+            ? inMortgageFlow
+            : activeTopic === "investment"
+              ? Boolean(
+                  incomingState &&
+                    typeof incomingState === "object" &&
+                    "stage" in (incomingState as object)
+                )
+              : false,
+    });
 
-    try {
-      const completion = await getOpenAI(key).chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: ADVISOR_SYSTEM_PROMPT },
-          ...thread.map((m) => ({
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          })),
-        ],
+    if (scopeReject) {
+      return Response.json({
+        answer: scopeReject.message,
+        ...(scopeReject.preserveState && incomingState != null
+          ? { state: incomingState }
+          : {}),
       });
-
-      const answer =
-        completion.choices[0].message.content?.trim() ||
-        "Sorry — I couldn't generate a reply. Please try again.";
-
-      return Response.json({ answer });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "OpenAI request failed";
-      console.error("[api/chat] OpenAI", err);
-      return Response.json(
-        {
-          answer: `Something went wrong talking to the AI: ${message}. If this is production, confirm OPENAI_API_KEY is set for this environment and your OpenAI account is in good standing.`,
-        },
-        { status: 502 }
-      );
     }
+
+    const direct = tryDirectSectionAnswer(lastUserContent, activeTopic);
+    if (direct) {
+      return Response.json({
+        answer: direct.answer,
+        ...(direct.preserveState && incomingState != null
+          ? { state: incomingState }
+          : {}),
+      });
+    }
+
+    const inActiveFlow =
+      activeTopic === "car-loan"
+        ? inCarLoanFlow
+        : activeTopic === "mortgage"
+          ? inMortgageFlow
+          : Boolean(
+              incomingState &&
+                typeof incomingState === "object" &&
+                "stage" in (incomingState as object)
+            );
+
+    if (!shouldRunGuidedIntake(lastUserContent, inActiveFlow)) {
+      const unknown = getUnknownDomainReply(activeTopic);
+      return Response.json({
+        answer: unknown.answer,
+        state: incomingState ?? undefined,
+      });
+    }
+
+    if (activeTopic === "car-loan") {
+      const carQuick = handleCarLoanFlow(thread, carState, { forceTopic: true });
+      if (carQuick) {
+        return Response.json({ answer: carQuick.answer, state: carQuick.state });
+      }
+      return Response.json({
+        answer:
+          "This section only handles car loans under our three fixed rules (20% down, max 48-month term, ≤10% transportation). Share vehicle price, down payment, term, income, and monthly transport costs — or use **All topics** for Mortgage or Investment.",
+        state: carState ?? undefined,
+      });
+    }
+
+    if (activeTopic === "mortgage") {
+      const mortgageQuick = handleMortgageFlow(thread, mortgageState, {
+        forceTopic: true,
+      });
+      if (mortgageQuick) {
+        return Response.json({
+          answer: mortgageQuick.answer,
+          state: mortgageQuick.state,
+        });
+      }
+      return Response.json({
+        answer:
+          "This section only handles mortgages: **15- or 30-year** loans, **refinance when rate drops ≥1%**, **20% down + closing costs + emergency fund** before buying (otherwise rent), and **extra payoff** when rate >5%. Say if you are buying or refinancing, or share your numbers.",
+        state: mortgageState ?? undefined,
+      });
+    }
+
+    if (
+      userTurns.length === 1 &&
+      topic !== "investment" &&
+      !isFinanceQuestion(firstUserContent)
+    ) {
+      return Response.json({
+        answer:
+          "Open **All topics** and choose **Investment**, **Car loan**, or **Mortgage**. We only answer those three — nothing else.",
+      });
+    }
+
+    if (activeTopic === "investment") {
+      const quick = handleConversationalFlow(
+        thread,
+        incomingState as ConversationState | null
+      );
+      if (quick) {
+        return Response.json({ answer: quick.answer, state: quick.state });
+      }
+    }
+
+    const unknown = getUnknownDomainReply(activeTopic);
+    return Response.json({
+      answer: unknown.answer,
+      ...(incomingState != null ? { state: incomingState } : {}),
+    });
   } catch (err) {
     console.error("[api/chat] fatal", err);
     return Response.json(
