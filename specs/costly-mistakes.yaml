@@ -1,0 +1,435 @@
+# Avoid Costly Mistakes module — educational guidance on major financial decisions.
+# Philosophy: we do NOT call things scams. We explain costs, tradeoffs, incentives,
+# risks, and alternatives so users decide clearly.
+# Run: npm run specs:compile
+
+id: costly-mistakes
+
+meta:
+  label: Avoid Costly Mistakes
+  blurb: Understand major financial decisions before committing.
+  hub_intro: |
+    Most wealth is built or lost through a small number of large decisions.
+    This module helps you understand big financial commitments — costs, incentives,
+    and alternatives — before you sign.
+
+intro: |
+  Most people focus on small expenses while ignoring major financial commitments.
+  Wealth is often built or lost through a small number of large decisions. This
+  module helps you slow down and understand the big ones.
+
+principle: |
+  We do not present products as scams. Many have legitimate uses. The goal is to
+  help you understand the costs, tradeoffs, incentives, risks, and alternatives —
+  so you can decide clearly, not from pressure.
+
+disclaimer: Educational guidance only. Not financial, tax, insurance, or legal advice.
+
+ai:
+  should:
+    - Explain what a product or decision is in plain language
+    - Explain why people buy it and who genuinely benefits
+    - Lay out costs, tradeoffs, incentives, and lower-cost alternatives
+    - Stay calm, neutral, and educational
+    - Help the user leave understanding the decision better
+  should_not:
+    - Call products scams, fraud, or rip-offs
+    - Make legal accusations or inflammatory claims
+    - Pressure the user toward a specific decision
+    - Guarantee outcomes or give individualized financial/tax/legal advice
+  tone:
+    - calm
+    - neutral
+    - educational
+    - non-judgmental
+  example_style:
+    avoid: "This is a scam."
+    use: "This product may be more complex and expensive than lower-cost alternatives."
+
+# Standardized assessment question ids reused across topics (prompt text is tailored
+# per topic). The reflection engine in src/lib/costly-mistakes keys off these ids.
+#   goal        (choice)  — what the user is trying to achieve
+#   pressure    (yesno)   — is a salesperson / commission driving the timeline
+#   understands (yesno)   — does the user understand all fees and costs
+#   compared    (yesno)   — have they compared a lower-cost alternative
+#   horizon     (choice)  — how locked-in / long-term the commitment is
+
+topics:
+  - id: iul
+    name: Indexed Universal Life (IUL)
+    emoji: "🧩"
+    category: insurance-investment
+    status: available
+    tagline: A complex life-insurance and investment hybrid.
+    what_is_it: |
+      Indexed Universal Life is permanent life insurance with a cash-value account
+      whose growth is tied to a market index (like the S&P 500), subject to caps,
+      floors, and participation rates set by the insurer. It combines a death
+      benefit with a tax-advantaged savings component in one product.
+    why_people_buy:
+      - The pitch of "market-linked growth with no downside" sounds appealing
+      - Tax-deferred cash-value growth and tax-free policy loans
+      - A permanent death benefit that doesn't expire like term insurance
+      - Often sold as a flexible "do-it-all" retirement and protection vehicle
+    costs:
+      - High commissions and fees come out of early premiums, so cash value grows slowly at first
+      - Cost of insurance rises as you age and can erode cash value
+      - Index gains are capped, and caps/participation rates can be lowered by the insurer
+      - Surrendering early often means surrender charges and little or no cash value back
+      - Illustrations frequently assume optimistic returns that may not materialize
+    who_benefits:
+      - High earners who have already maxed out 401(k)s, IRAs, and HSAs
+      - People with a genuine permanent (lifelong) insurance need, such as estate planning
+      - The agent and insurer, who earn significant upfront commissions
+    alternatives:
+      - Term life insurance for protection, which is far cheaper for the same death benefit
+      - Tax-advantaged accounts (401(k), Roth IRA, HSA) for tax-deferred growth
+      - Low-cost index funds in a brokerage for flexible, transparent investing
+      - 'Buy term and invest the difference: a simpler separation of needs'
+    questions_to_ask:
+      - What are ALL the fees and the cost of insurance, in writing, year by year?
+      - What is the guaranteed (not illustrated) cash value over 10 and 20 years?
+      - What are the surrender charges if I stop or reduce premiums?
+      - How is the cap set, and can the insurer change it later?
+      - Have I already maxed out my 401(k), IRA, and HSA first?
+    questions:
+      - id: goal
+        prompt: What's mainly drawing you to an IUL?
+        type: choice
+        options:
+          - { id: protection, label: Protecting my family if I die }
+          - { id: investing, label: Tax-advantaged growth / retirement }
+          - { id: both, label: "Both, in one product" }
+      - id: pressure
+        prompt: Is a salesperson or agent pushing you to decide soon?
+        type: yesno
+      - id: understands
+        prompt: Do you fully understand the fees, caps, and cost of insurance?
+        type: yesno
+      - id: compared
+        prompt: Have you compared "term life + index funds" as an alternative?
+        type: yesno
+
+  - id: whole-life
+    name: Whole Life Insurance
+    emoji: "🛡️"
+    category: insurance-investment
+    status: available
+    tagline: Permanent insurance with fixed premiums and slow-building cash value.
+    what_is_it: |
+      Whole life is permanent life insurance with level premiums, a guaranteed
+      death benefit, and a cash-value account that grows at a modest guaranteed
+      rate (sometimes with dividends from mutual insurers). It's designed to last
+      your whole life as long as premiums are paid.
+    why_people_buy:
+      - Lifelong coverage that never expires and premiums that never rise
+      - Guaranteed, stable cash-value growth that feels safe
+      - Tax-deferred growth and the ability to borrow against cash value
+      - Often marketed for estate planning or "forced savings"
+    costs:
+      - Premiums are often 5–15x higher than term life for the same death benefit
+      - Cash value builds very slowly in the early years due to fees and commissions
+      - Guaranteed returns are modest, often trailing simple long-term investing
+      - Surrendering early can forfeit much of what you paid
+      - Borrowing from the policy reduces the death benefit if not repaid
+    who_benefits:
+      - People with lifelong dependents or estate-tax planning needs
+      - Those who genuinely cannot stay disciplined to save or invest separately
+      - The agent and insurer through substantial first-year commissions
+    alternatives:
+      - Term life insurance to cover the years your family depends on your income
+      - Investing the premium difference in tax-advantaged or index accounts
+      - High-yield savings or bonds for the "safe, guaranteed" portion of a plan
+    questions_to_ask:
+      - How does the total cost compare to a 20- or 30-year term policy?
+      - What is the guaranteed cash value at 10, 20, and 30 years?
+      - How much of my first-year premium goes to commissions and fees?
+      - Do I actually need coverage for my entire life, or just the next 20–30 years?
+      - What happens if I can't keep paying the premium later?
+    questions:
+      - id: goal
+        prompt: What's the main reason you're considering whole life?
+        type: choice
+        options:
+          - { id: protection, label: Income protection for my family }
+          - { id: investing, label: Savings / cash-value growth }
+          - { id: estate, label: Estate or legacy planning }
+      - id: pressure
+        prompt: Is someone pressuring you to buy soon?
+        type: yesno
+      - id: understands
+        prompt: Do you understand how slowly cash value builds early on?
+        type: yesno
+      - id: compared
+        prompt: Have you priced out a comparable term-life policy?
+        type: yesno
+
+  - id: annuities
+    name: Annuities
+    emoji: "📜"
+    category: insurance-investment
+    status: available
+    tagline: Insurance contracts that convert money into future income.
+    what_is_it: |
+      An annuity is a contract with an insurer where you pay a lump sum or series
+      of payments in exchange for future income, often in retirement. They range
+      from simple (immediate fixed income) to very complex (variable and indexed
+      annuities with riders, caps, and fees).
+    why_people_buy:
+      - Desire for guaranteed lifetime income and protection against outliving savings
+      - Tax-deferred growth on the money inside the contract
+      - Fear of market volatility near or during retirement
+      - Often sold as "safe" with attractive-sounding guarantees
+    costs:
+      - Variable and indexed annuities can carry high annual fees and rider charges
+      - Surrender periods can lock up money for years with steep early-withdrawal penalties
+      - Complexity makes it hard to compare true cost and value
+      - Returns on complex annuities are often capped or lower than expected
+      - Inflation can erode the value of fixed lifetime payments
+    who_benefits:
+      - Retirees who want a simple, low-cost guaranteed income floor (e.g. a SPIA)
+      - People without pensions who fear outliving their money
+      - The selling agent, especially on high-commission complex products
+    alternatives:
+      - A simple immediate or deferred income annuity (SPIA) instead of complex ones
+      - Delaying Social Security to increase guaranteed inflation-adjusted income
+      - A diversified withdrawal strategy from low-cost index funds and bonds
+      - Bond ladders or Treasury Inflation-Protected Securities for stable income
+    questions_to_ask:
+      - What are the total annual fees, including riders, in writing?
+      - How long is the surrender period and what are the penalties?
+      - Is this a simple income annuity or a complex indexed/variable product?
+      - How does the guaranteed income compare to delaying Social Security?
+      - What happens to the balance if I die early?
+    questions:
+      - id: goal
+        prompt: What are you hoping an annuity will do for you?
+        type: choice
+        options:
+          - { id: income, label: Guaranteed lifetime income }
+          - { id: safety, label: Protect money from market drops }
+          - { id: investing, label: Tax-deferred growth }
+      - id: pressure
+        prompt: Is an agent urging you to act before an offer "expires"?
+        type: yesno
+      - id: understands
+        prompt: Do you understand the fees and surrender period?
+        type: yesno
+      - id: compared
+        prompt: Have you compared a simple SPIA or delaying Social Security?
+        type: yesno
+
+  - id: oversized-home
+    name: Oversized Homes
+    emoji: "🏰"
+    category: big-purchase
+    status: available
+    tagline: Buying more house than your life and budget need.
+    what_is_it: |
+      An oversized home is a purchase that's larger or more expensive than your
+      household actually needs or can comfortably afford — often justified by
+      "growing into it," resale, or status. The risk isn't the house itself, but
+      the ongoing financial weight it creates.
+    why_people_buy:
+      - Anticipating future needs (kids, guests, working from home)
+      - Status, lifestyle, or keeping up with peers
+      - Belief that a bigger home is always a better investment
+      - Lenders approving a larger loan than is comfortable to carry
+    costs:
+      - Higher mortgage, property taxes, and insurance every month for decades
+      - More to heat, cool, furnish, maintain, and repair
+      - Larger down payment ties up cash that could build flexibility
+      - Less monthly room for saving, investing, and emergencies
+      - Harder to sell quickly if the market or your situation changes
+    who_benefits:
+      - Families who genuinely use the space for years, not "someday"
+      - Real-estate agents and lenders, whose fees scale with price
+      - Furniture, utility, and maintenance providers
+    alternatives:
+      - Buy for your real needs now and move later if life changes
+      - Keep total housing costs at or below ~35% of gross income (our mortgage rule)
+      - Direct the savings into investments, flexibility, and an emergency fund
+      - Rent the extra space you'd only occasionally use
+    questions_to_ask:
+      - How much will the total monthly cost (mortgage, tax, insurance, upkeep) be?
+      - Does this keep housing at or under 35% of my gross income?
+      - Am I buying for how I live now, or for a "someday" that may not come?
+      - What could I do with the money the extra space costs each month?
+      - How easily could I sell or downsize if my situation changed?
+    questions:
+      - id: goal
+        prompt: Why are you considering the larger home?
+        type: choice
+        options:
+          - { id: need, label: We genuinely need the space now }
+          - { id: future, label: Planning for the future / someday }
+          - { id: status, label: "Lifestyle, resale, or keeping up" }
+      - id: pressure
+        prompt: Do you feel rushed by the market or an agent?
+        type: yesno
+      - id: understands
+        prompt: Have you added up the full monthly cost beyond the mortgage?
+        type: yesno
+      - id: compared
+        prompt: Have you compared a smaller home and investing the difference?
+        type: yesno
+
+  - id: expensive-vehicle
+    name: Expensive Vehicles
+    emoji: "🏎️"
+    category: big-purchase
+    status: available
+    tagline: A depreciating asset that can quietly drain monthly cash flow.
+    what_is_it: |
+      An expensive vehicle is one whose purchase price, financing, insurance, and
+      running costs take more of your income than your plan can comfortably carry.
+      Cars lose value over time, so overspending here converts savings into
+      depreciation.
+    why_people_buy:
+      - Status, identity, and enjoyment
+      - Long loan terms make a pricey car feel "affordable" monthly
+      - Underestimating insurance, fuel, and maintenance costs
+      - Dealer financing and add-ons that obscure the true cost
+    costs:
+      - Rapid depreciation, especially in the first few years
+      - Higher insurance, registration, fuel, and maintenance
+      - Long loans (60–84 months) increase total interest and upside-down risk
+      - Monthly payments crowd out saving and investing
+      - Add-ons and warranties inflate the financed amount
+    who_benefits:
+      - People who keep a reliable car for many years and truly value it
+      - Dealers, lenders, and add-on/warranty sellers
+      - Insurers, through higher premiums on costlier vehicles
+    alternatives:
+      - Keep transportation (payment + insurance + fuel) under ~10% of gross income (our car rule)
+      - Choose a reliable used or modest new car and finance 48 months or less
+      - Buy with more down to shrink the loan and payment
+      - Keep a paid-off car longer and invest the would-be payment
+    questions_to_ask:
+      - What is the total monthly cost — payment, insurance, fuel, and upkeep?
+      - Does that stay under 10% of my gross income?
+      - Is the loan term 48 months or less?
+      - How much will this car be worth in 3–5 years?
+      - What am I giving up monthly to drive this instead of a cheaper option?
+    questions:
+      - id: goal
+        prompt: What's driving the choice of a more expensive vehicle?
+        type: choice
+        options:
+          - { id: need, label: Reliability and real needs }
+          - { id: enjoyment, label: Enjoyment / something I want }
+          - { id: status, label: Status or image }
+      - id: pressure
+        prompt: Is a dealer pushing financing or add-ons today?
+        type: yesno
+      - id: understands
+        prompt: Have you totaled insurance, fuel, and maintenance too?
+        type: yesno
+      - id: compared
+        prompt: Have you compared a cheaper reliable option and investing the difference?
+        type: yesno
+
+  - id: high-fee-advisor
+    name: High Fee Advisors
+    emoji: "💼"
+    category: advisor
+    status: available
+    tagline: Good advice is worth paying for — but fees compound against you.
+    what_is_it: |
+      A high-fee advisor charges well above low-cost norms — often around 1%+ of
+      your assets every year, or sells commission-based products. Advice can be
+      valuable, but high ongoing fees compound over decades and can quietly consume
+      a large share of your returns.
+    why_people_buy:
+      - Wanting professional help and reassurance with money decisions
+      - Lack of time, interest, or confidence to manage investments alone
+      - Trusting a personable advisor or a referral from friends/family
+      - Not realizing how much a 1%+ annual fee costs over 20–30 years
+    costs:
+      - A 1% annual fee can consume a large fraction of lifetime returns through compounding
+      - Commission-based advisors may face conflicts of interest in what they sell
+      - Layered fees (advisor fee + fund fees) can stack up
+      - Sometimes "free" advice is actually paid for through product commissions
+    who_benefits:
+      - People who need real, ongoing planning and will act on it
+      - Those who would otherwise make costly behavioral mistakes alone
+      - The advisor and firm, whose revenue scales with your balance or sales
+    alternatives:
+      - A fee-only fiduciary advisor paid a flat or hourly fee
+      - A one-time or as-needed financial plan instead of ongoing AUM fees
+      - Low-cost index funds or target-date funds for a simple portfolio
+      - Robo-advisors for low-cost automated management
+    questions_to_ask:
+      - Are you a fiduciary 100% of the time, in writing?
+      - Exactly how are you paid — fees, commissions, or both?
+      - What is my all-in annual cost, including fund fees, in dollars?
+      - What would a flat-fee or hourly arrangement cost instead?
+      - What specifically do I get each year for this fee?
+    questions:
+      - id: goal
+        prompt: What do you want an advisor to help with most?
+        type: choice
+        options:
+          - { id: planning, label: A financial plan / big decisions }
+          - { id: investing, label: Managing my investments }
+          - { id: reassurance, label: Reassurance and accountability }
+      - id: pressure
+        prompt: Is the advisor steering you toward products they sell?
+        type: yesno
+      - id: understands
+        prompt: Do you know your all-in annual cost in dollars?
+        type: yesno
+      - id: compared
+        prompt: Have you compared a fee-only or flat-fee advisor?
+        type: yesno
+
+  - id: timeshare
+    name: Timeshares
+    emoji: "🏝️"
+    category: big-purchase
+    status: future
+    tagline: Prepaid vacations that are easy to buy and hard to exit.
+    what_is_it: |
+      A timeshare gives you the right to use a vacation property for a set period
+      each year, with ongoing maintenance fees. They're known for high-pressure
+      sales and for being difficult and costly to resell or exit.
+    why_people_buy:
+      - The appeal of guaranteed future vacations at a "locked-in" price
+      - High-pressure presentations with limited-time incentives
+      - Underestimating rising annual maintenance fees
+      - Believing it's an investment that holds value
+    costs:
+      - Upfront purchase price plus perpetual, often-rising maintenance fees
+      - Very low or negative resale value
+      - Difficult and sometimes expensive to exit the contract
+      - Limited flexibility on dates and locations
+    who_benefits:
+      - Frequent visitors to one resort who will genuinely use it for years
+      - The developer and sales organization, through high margins
+    alternatives:
+      - Booking vacations as you go, keeping full flexibility
+      - Renting a timeshare week from an existing owner to "try before buying"
+      - Saving a dedicated travel fund and investing it until needed
+    questions_to_ask:
+      - What are the annual maintenance fees, and how fast have they risen?
+      - What is the realistic resale value if I want out?
+      - How hard is it to exit this contract?
+      - Would renting or booking trips cost less over 10 years?
+      - Am I deciding under sales pressure right now?
+    questions:
+      - id: goal
+        prompt: What's the appeal of the timeshare?
+        type: choice
+        options:
+          - { id: need, label: We vacation here every year anyway }
+          - { id: deal, label: It feels like a good deal / investment }
+          - { id: pressure, label: We're in a presentation right now }
+      - id: pressure
+        prompt: Are you being pressured to sign today?
+        type: yesno
+      - id: understands
+        prompt: Do you know the annual fees and how to exit later?
+        type: yesno
+      - id: compared
+        prompt: Have you compared just booking trips as you go?
+        type: yesno

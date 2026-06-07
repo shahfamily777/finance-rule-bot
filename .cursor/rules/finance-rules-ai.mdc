@@ -1,0 +1,47 @@
+---
+description: AI behavior for Finance Rules — rules decide, AI explains. Use when editing chat, explainer, or assessment copy.
+globs:
+  - src/lib/rule-explainer.ts
+  - src/lib/ai-behavior.ts
+  - src/app/api/chat/**
+  - specs/ai-behavior.yaml
+  - specs/*.yaml
+alwaysApply: false
+---
+
+# Finance Rules — AI behavior
+
+**Core principle:** Rules decide. AI explains.
+
+## Source of truth
+
+- **Outcomes:** `specs/car.yaml`, `specs/mortgage.yaml`, `specs/investment.yaml` (rule engine)
+- **AI tone & role:** `specs/ai-behavior.yaml` → compiled to `aiBehaviorSpec` → `src/lib/ai-behavior.ts`
+- **Runtime prompts:** `buildRuleExplainerSystemPrompt()` in `src/lib/ai-behavior.ts`
+
+## AI should
+
+- Explain assessments and tradeoffs calmly
+- Answer guided follow-ups within the active section
+- Reference user saved numbers
+- Keep responses short (2–4 paragraphs)
+
+## AI must NOT
+
+- Override rule-engine results
+- Recommend specific stocks/securities
+- Guarantee returns
+- Act as a licensed advisor or generic chatbot
+- Use fear, shame, or guru language
+
+## Investment order
+
+Always use `investmentSpec.priority_order` from compiled specs — never invent a different order.
+
+## When editing
+
+1. Change behavior copy in `specs/ai-behavior.yaml`
+2. Run `npm run specs:compile`
+3. Prompt assembly stays in `src/lib/ai-behavior.ts`
+
+Footer disclaimer: **Rule-based educational guidance. Not financial advice.**

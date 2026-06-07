@@ -8,6 +8,13 @@ import {
   parseGrossMonthlyIncome,
   parsePurchasePrice,
 } from "@/lib/intake-policy";
+import {
+  acknowledgeLastConcern,
+  autoResolveCarConcerns,
+  pickCarLoanConcern,
+} from "@/lib/conversational-intake";
+import { carLoanAssessmentAnswer } from "@/lib/assessment-car";
+import { applyCarLoanCorrections, looksLikeDataCorrection } from "@/lib/field-corrections";
 import { parseTermMonths, tryDirectSectionAnswer } from "@/lib/section-qa";
 
 export type Msg = { role: "user" | "assistant"; content: string };
@@ -27,7 +34,11 @@ export type CarLoanStage =
   | null;
 
 export type CarLoanConversationState = {
+  /** Set after the user submits the intake form; chat is Q&A only until they edit the form. */
+  intakeComplete?: boolean;
   stage: CarLoanStage;
+  addressedConcerns?: string[];
+  lastConcernShown?: string;
   data: {
     vehiclePrice: number | null;
     downPayment: number | null;
@@ -104,18 +115,9 @@ function loanPrincipal(d: CarLoanConversationState["data"]): number | null {
   return p > 0 ? p : null;
 }
 
-/** Standard fixed-rate amortization: monthly payment from principal, APR, and term. */
-export function computeMonthlyLoanPayment(
-  principal: number,
-  annualRatePct: number,
-  termMonths: number
-): number {
-  if (principal <= 0 || termMonths <= 0) return 0;
-  if (annualRatePct <= 0) return principal / termMonths;
-  const r = annualRatePct / 100 / 12;
-  const factor = Math.pow(1 + r, termMonths);
-  return (principal * r * factor) / (factor - 1);
-}
+import { computeMonthlyLoanPayment } from "@/lib/loan-math";
+
+export { computeMonthlyLoanPayment } from "@/lib/loan-math";
 
 function tryComputeMonthlyPayment(d: CarLoanConversationState["data"]): void {
   const principal = loanPrincipal(d);
@@ -268,6 +270,36 @@ function downPaymentPct(d: CarLoanConversationState["data"]): number | null {
   return (d.downPayment / d.vehiclePrice) * 100;
 }
 
+export function assessCarLoanState(state: CarLoanConversationState): FlowResult {
+  return { answer: carLoanAssessmentAnswer(state), state: { ...state, stage: null } };
+}
+
+export function carLoanStateFromForm(form: {
+  vehiclePrice: number;
+  downPayment: number;
+  loanTermMonths: number;
+  grossMonthlyIncome: number;
+  annualInterestRatePct: number;
+  monthlyInsurance: number;
+  fuelType: "gas" | "ev";
+  monthlyFuel: number;
+}): CarLoanConversationState {
+  const data: CarLoanConversationState["data"] = {
+    vehiclePrice: form.vehiclePrice,
+    downPayment: form.downPayment,
+    loanTermMonths: form.loanTermMonths,
+    grossMonthlyIncome: form.grossMonthlyIncome,
+    annualInterestRatePct: form.annualInterestRatePct,
+    monthlyInsurance: form.monthlyInsurance,
+    monthlyFuel: form.monthlyFuel,
+    isEv: form.fuelType === "ev",
+    monthlyCarPayment: null,
+    monthlyTransportTotal: null,
+  };
+  tryComputeMonthlyPayment(data);
+  return { stage: null, data };
+}
+
 function buildAssessment(state: CarLoanConversationState): FlowResult {
   const d = state.data;
   const downPct = downPaymentPct(d);
@@ -401,9 +433,10 @@ function nextCarLoanQuestion(
 ): FlowResult {
   const d = state.data;
   tryComputeMonthlyPayment(d);
+  const summary = carLoanContextSummary(d);
   const ack =
-    options?.acknowledge !== false && carLoanContextSummary(d).length >= 2
-      ? intakeAcknowledgment(carLoanContextSummary(d))
+    options?.acknowledge !== false && summary.length >= 4
+      ? intakeAcknowledgment(summary)
       : "";
 
   if (d.vehiclePrice === null) {
@@ -695,9 +728,26 @@ export function handleCarLoanFlow(
   if (!options?.forceTopic && !mentionsCarLoan(allUserText)) return null;
 
   const state = initCarLoanState(incomingState);
-  syncAllUserSignals(state, thread);
-
   const last = thread[thread.length - 1];
+
+  if (incomingState?.intakeComplete) {
+    return null;
+  }
+
+  if (last?.role === "user" && looksLikeDataCorrection(last.content)) {
+    const { note } = applyCarLoanCorrections(state.data, last.content);
+    tryComputeMonthlyPayment(state.data);
+    state.addressedConcerns = [];
+    state.lastConcernShown = undefined;
+    state.stage = null;
+    const assessment = buildAssessment(state);
+    return {
+      answer: `${note ?? "Recalculating with your updated numbers."}\n\n${assessment.answer}`,
+      state: assessment.state,
+    };
+  }
+
+  syncAllUserSignals(state, thread);
   const active = isCarLoanFlowActive(state);
   let continuation = false;
 
@@ -769,12 +819,24 @@ export function handleCarLoanFlow(
 
   if (!options?.forceTopic && !hasAny && !state.stage) return null;
 
+  let conversational = autoResolveCarConcerns(state);
+  if (last?.role === "user") {
+    conversational = acknowledgeLastConcern(conversational, last.content);
+    const picked = pickCarLoanConcern(conversational, last.content);
+    if (picked) {
+      return {
+        answer: picked.concern.message,
+        state: picked.state,
+      };
+    }
+  }
+
   const softOk =
     last?.role === "user" &&
     /^(ok|okay|yes|sure)\??\.?$/i.test(last.content.trim()) &&
     state.data.annualInterestRatePct !== null;
 
-  return nextCarLoanQuestion(state, {
+  return nextCarLoanQuestion(conversational, {
     acknowledge: !softOk && !continuation,
   });
 }

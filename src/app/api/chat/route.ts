@@ -1,5 +1,23 @@
-import { isFinanceQuestion } from "@/lib/scope";
-import { handleConversationalFlow, type ConversationState } from "@/lib/conversation";
+import {
+  handleInvestmentChat,
+  type ConversationState,
+} from "@/lib/conversation";
+import {
+  assessCarLoanForm,
+  assessInvestmentForm,
+  assessMortgageForm,
+} from "@/lib/form-assess";
+import { FormSanityError } from "@/lib/form-sanity";
+import type {
+  CarLoanFormValues,
+  InvestmentFormValues,
+  MortgageFormValues,
+} from "@/lib/form-types";
+import {
+  EDIT_NUMBERS_REPLY,
+  FORM_FIRST_REPLY,
+  wantsToChangeNumbers,
+} from "@/lib/intake-session";
 import {
   handleCarLoanFlow,
   inferCarLoanFlowFromThread,
@@ -12,13 +30,19 @@ import {
   type MortgageConversationState,
 } from "@/lib/mortgage-flow";
 import {
+  explainRuleQuestion,
+  isConversationalNumericReply,
+  prefersExplainerAnswer,
+} from "@/lib/rule-explainer";
+import {
   getUnknownDomainReply,
   isIntakeDataMessage,
   isUserAskingQuestion,
-  shouldRunGuidedIntake,
   tryDirectSectionAnswer,
 } from "@/lib/section-qa";
+import { finalizeAssistantReply } from "@/lib/conversation-guard";
 import { checkTopicScope, type TopicId } from "@/lib/topic-scope";
+import { explainCostlyMistake } from "@/lib/costly-mistakes/explainer";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -56,6 +80,20 @@ const MAX_MESSAGES = 60;
 
 type ClientMsg = { role: "user" | "assistant"; content: string };
 
+function chatResponse(
+  thread: ClientMsg[],
+  payload: { answer: string; state?: unknown },
+  init?: ResponseInit
+) {
+  return Response.json(
+    {
+      ...payload,
+      answer: finalizeAssistantReply(thread, payload.answer),
+    },
+    init
+  );
+}
+
 function normalizeMessages(raw: unknown): ClientMsg[] | null {
   if (!Array.isArray(raw)) return null;
   const out: ClientMsg[] = [];
@@ -88,6 +126,123 @@ export async function POST(req: Request) {
       );
     }
 
+    const topic =
+      body &&
+      typeof body === "object" &&
+      "topic" in body &&
+      typeof (body as { topic: unknown }).topic === "string"
+        ? (body as { topic: string }).topic
+        : null;
+
+    const activeTopic: TopicId =
+      topic === "car-loan" || topic === "mortgage" || topic === "investment"
+        ? topic
+        : "investment";
+
+    const action =
+      body && typeof body === "object" && "action" in body
+        ? (body as { action: unknown }).action
+        : null;
+
+    if (topic === "costly-mistakes") {
+      const mistakeTopic =
+        body &&
+        typeof body === "object" &&
+        "mistakeTopic" in body &&
+        typeof (body as { mistakeTopic: unknown }).mistakeTopic === "string"
+          ? (body as { mistakeTopic: string }).mistakeTopic
+          : null;
+      const cmMessages = normalizeMessages(
+        body && typeof body === "object" && "messages" in body
+          ? (body as { messages: unknown }).messages
+          : null
+      );
+      if (!mistakeTopic) {
+        return Response.json(
+          { answer: "Pick a topic first to ask about it." },
+          { status: 400 }
+        );
+      }
+      if (!cmMessages?.length) {
+        return Response.json({ answer: "Please enter a message." });
+      }
+      const answer = await explainCostlyMistake({
+        topicId: mistakeTopic,
+        thread: cmMessages.slice(-MAX_MESSAGES),
+        apiKey: getApiKey(),
+      });
+      return Response.json({
+        answer:
+          answer ??
+          "I couldn't find that topic. Go back and pick one from the list.",
+      });
+    }
+
+    if (action === "submit-form") {
+      const form =
+        body && typeof body === "object" && "form" in body
+          ? (body as { form: unknown }).form
+          : null;
+      if (!form || typeof form !== "object") {
+        return Response.json(
+          { answer: "Form data is missing. Please fill out the form and try again." },
+          { status: 400 }
+        );
+      }
+
+      const sanityAcknowledged: boolean =
+        !!body &&
+        typeof body === "object" &&
+        "sanityAcknowledged" in body &&
+        (body as { sanityAcknowledged: unknown }).sanityAcknowledged === true;
+
+      try {
+        if (activeTopic === "car-loan") {
+          const result = assessCarLoanForm(form as CarLoanFormValues, { sanityAcknowledged });
+          return Response.json({
+            answer: result.answer,
+            assessment: result.assessment,
+            state: result.state,
+            intakeComplete: true,
+          });
+        }
+        if (activeTopic === "mortgage") {
+          const result = assessMortgageForm(form as MortgageFormValues, { sanityAcknowledged });
+          return Response.json({
+            answer: result.answer,
+            assessment: result.assessment,
+            state: result.state,
+            intakeComplete: true,
+          });
+        }
+        if (activeTopic === "investment") {
+          const result = assessInvestmentForm(form as InvestmentFormValues, {
+            sanityAcknowledged,
+          });
+          return Response.json({
+            answer: result.answer,
+            assessment: result.assessment,
+            state: result.state,
+            intakeComplete: true,
+          });
+        }
+      } catch (e) {
+        if (e instanceof FormSanityError) {
+          return Response.json({ answer: e.message }, { status: 400 });
+        }
+        return Response.json(
+          {
+            answer: `Could not run assessment: ${e instanceof Error ? e.message : String(e)}`,
+          },
+          { status: 400 }
+        );
+      }
+      return Response.json(
+        { answer: "Unknown topic for form submission." },
+        { status: 400 }
+      );
+    }
+
     const messages = normalizeMessages(
       body && typeof body === "object" && "messages" in body
         ? (body as { messages: unknown }).messages
@@ -110,22 +265,8 @@ export async function POST(req: Request) {
       return Response.json({ answer: "Please enter a message." });
     }
 
-    const topic =
-      body &&
-      typeof body === "object" &&
-      "topic" in body &&
-      typeof (body as { topic: unknown }).topic === "string"
-        ? (body as { topic: string }).topic
-        : null;
-
     const userTurns = thread.filter((m) => m.role === "user");
     const lastUserContent = userTurns[userTurns.length - 1]?.content ?? "";
-    const firstUserContent = userTurns[0]?.content ?? "";
-    const activeTopic: TopicId =
-      topic === "car-loan" || topic === "mortgage" || topic === "investment"
-        ? topic
-        : "investment";
-
     const incomingState =
       body && typeof body === "object" && "state" in body
         ? (body as { state?: unknown }).state
@@ -133,6 +274,10 @@ export async function POST(req: Request) {
 
     const carState = incomingState as CarLoanConversationState | null;
     const mortgageState = incomingState as MortgageConversationState | null;
+    const investmentState = incomingState as ConversationState | null;
+    const carIntakeComplete = Boolean(carState?.intakeComplete);
+    const mortgageIntakeComplete = Boolean(mortgageState?.intakeComplete);
+    const investmentIntakeComplete = Boolean(investmentState?.intakeComplete);
     const inCarLoanFlow =
       isCarLoanFlowActive(carState) || inferCarLoanFlowFromThread(thread);
     const inMortgageFlow = isMortgageFlowActive(mortgageState);
@@ -144,7 +289,8 @@ export async function POST(req: Request) {
           : activeTopic === "mortgage"
             ? inMortgageFlow
             : activeTopic === "investment"
-              ? Boolean(
+              ? investmentIntakeComplete ||
+                Boolean(
                   incomingState &&
                     typeof incomingState === "object" &&
                     "stage" in (incomingState as object)
@@ -153,7 +299,7 @@ export async function POST(req: Request) {
     });
 
     if (scopeReject) {
-      return Response.json({
+      return chatResponse(thread, {
         answer: scopeReject.message,
         ...(scopeReject.preserveState && incomingState != null
           ? { state: incomingState }
@@ -161,110 +307,120 @@ export async function POST(req: Request) {
       });
     }
 
-    const inActiveFlow =
-      activeTopic === "car-loan"
-        ? inCarLoanFlow
-        : activeTopic === "mortgage"
-          ? inMortgageFlow
-          : Boolean(
-              incomingState &&
-                typeof incomingState === "object" &&
-                "stage" in (incomingState as object)
-            );
-
-    // Mid-checklist: flow handler owns term/number follow-ups (don't steal with a generic rule reply).
-    if (activeTopic === "car-loan" && inCarLoanFlow) {
-      const carQuick = handleCarLoanFlow(thread, carState, { forceTopic: true });
-      if (carQuick) {
-        return Response.json({ answer: carQuick.answer, state: carQuick.state });
-      }
-    }
-
-    if (activeTopic === "mortgage" && inMortgageFlow) {
-      const mortgageQuick = handleMortgageFlow(thread, mortgageState, {
-        forceTopic: true,
-      });
-      if (mortgageQuick) {
-        return Response.json({
-          answer: mortgageQuick.answer,
-          state: mortgageQuick.state,
+    if (wantsToChangeNumbers(lastUserContent)) {
+      const intakeDone =
+        (activeTopic === "car-loan" && carIntakeComplete) ||
+        (activeTopic === "mortgage" && mortgageIntakeComplete) ||
+        (activeTopic === "investment" && investmentIntakeComplete);
+      if (intakeDone) {
+        return chatResponse(thread, {
+          answer: EDIT_NUMBERS_REPLY,
+          state: incomingState ?? undefined,
         });
       }
     }
 
-    const direct = tryDirectSectionAnswer(lastUserContent, activeTopic);
-    if (direct) {
-      return Response.json({
-        answer: direct.answer,
-        ...(direct.preserveState && incomingState != null
-          ? { state: incomingState }
-          : {}),
-      });
-    }
+    const intakeCompleteForTopic =
+      activeTopic === "car-loan"
+        ? carIntakeComplete
+        : activeTopic === "mortgage"
+          ? mortgageIntakeComplete
+          : investmentIntakeComplete;
 
-    if (!shouldRunGuidedIntake(lastUserContent, inActiveFlow)) {
+    if (intakeCompleteForTopic) {
+      if (
+        isIntakeDataMessage(lastUserContent, true, { intakeComplete: true }) &&
+        !isUserAskingQuestion(lastUserContent)
+      ) {
+        return chatResponse(thread, {
+          answer: EDIT_NUMBERS_REPLY,
+          state: incomingState ?? undefined,
+        });
+      }
+
+      const wantsExplain =
+        prefersExplainerAnswer(lastUserContent, activeTopic) ||
+        isConversationalNumericReply(lastUserContent, thread);
+
+      const direct = tryDirectSectionAnswer(lastUserContent, activeTopic);
+
+      if (!wantsExplain && direct) {
+        return chatResponse(thread, {
+          answer: direct.answer,
+          state: incomingState ?? undefined,
+        });
+      }
+
+      if (wantsExplain || (isUserAskingQuestion(lastUserContent) && !direct)) {
+        const explained = await explainRuleQuestion({
+          topic: activeTopic,
+          thread,
+          state: incomingState,
+          apiKey: getApiKey(),
+        });
+        if (explained) {
+          return chatResponse(thread, {
+            answer: explained,
+            state: incomingState ?? undefined,
+          });
+        }
+      }
+
+      if (direct) {
+        return chatResponse(thread, {
+          answer: direct.answer,
+          state: incomingState ?? undefined,
+        });
+      }
+
+      if (activeTopic === "car-loan") {
+        const carQuick = handleCarLoanFlow(thread, carState, { forceTopic: true });
+        if (carQuick) {
+          return chatResponse(thread, {
+            answer: carQuick.answer,
+            state: carQuick.state,
+          });
+        }
+      }
+      if (activeTopic === "mortgage") {
+        const mortgageQuick = handleMortgageFlow(thread, mortgageState, {
+          forceTopic: true,
+        });
+        if (mortgageQuick) {
+          return chatResponse(thread, {
+            answer: mortgageQuick.answer,
+            state: mortgageQuick.state,
+          });
+        }
+      }
+      if (activeTopic === "investment") {
+        const invQuick = handleInvestmentChat(thread, investmentState);
+        if (invQuick) {
+          return chatResponse(thread, {
+            answer: invQuick.answer,
+            state: invQuick.state,
+          });
+        }
+      }
+
       const unknown = getUnknownDomainReply(activeTopic);
-      return Response.json({
+      return chatResponse(thread, {
         answer: unknown.answer,
         state: incomingState ?? undefined,
       });
     }
 
-    if (activeTopic === "car-loan") {
-      const carQuick = handleCarLoanFlow(thread, carState, { forceTopic: true });
-      if (carQuick) {
-        return Response.json({ answer: carQuick.answer, state: carQuick.state });
-      }
-      return Response.json({
-        answer:
-          "This section only handles car loans under our three fixed rules (20% down, max 48-month term, ≤10% transportation). Share vehicle price, down payment, term, income, APR, insurance, and gas or EV charging — or use **All topics** for Mortgage or Investment.",
-        state: carState ?? undefined,
-      });
-    }
-
-    if (activeTopic === "mortgage") {
-      const mortgageQuick = handleMortgageFlow(thread, mortgageState, {
-        forceTopic: true,
-      });
-      if (mortgageQuick) {
-        return Response.json({
-          answer: mortgageQuick.answer,
-          state: mortgageQuick.state,
+    if (!intakeCompleteForTopic) {
+      const direct = tryDirectSectionAnswer(lastUserContent, activeTopic);
+      if (direct) {
+        return chatResponse(thread, {
+          answer: direct.answer,
         });
       }
-      return Response.json({
-        answer:
-          "This section only handles mortgages: **15- or 30-year** loans, **refinance when rate drops ≥1%**, **20% down + closing costs + emergency fund** before buying (otherwise rent), and **extra payoff** when rate >5%. Say if you are buying or refinancing, or share your numbers.",
-        state: mortgageState ?? undefined,
+      return chatResponse(thread, {
+        answer: FORM_FIRST_REPLY[activeTopic],
       });
     }
-
-    if (
-      userTurns.length === 1 &&
-      topic !== "investment" &&
-      !isFinanceQuestion(firstUserContent)
-    ) {
-      return Response.json({
-        answer:
-          "Open **All topics** and choose **Investment**, **Car loan**, or **Mortgage**. We only answer those three — nothing else.",
-      });
-    }
-
-    if (activeTopic === "investment") {
-      const quick = handleConversationalFlow(
-        thread,
-        incomingState as ConversationState | null
-      );
-      if (quick) {
-        return Response.json({ answer: quick.answer, state: quick.state });
-      }
-    }
-
-    const unknown = getUnknownDomainReply(activeTopic);
-    return Response.json({
-      answer: unknown.answer,
-      ...(incomingState != null ? { state: incomingState } : {}),
-    });
   } catch (err) {
     console.error("[api/chat] fatal", err);
     return Response.json(

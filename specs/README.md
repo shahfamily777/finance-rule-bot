@@ -17,6 +17,8 @@ npm run specs:compile
 | `car.yaml` | Min down %, max loan months, transport cap, intake questions |
 | `mortgage.yaml` | 15/30-year terms, 35% housing cap, refi 1% rule, readiness checklist |
 | `investment.yaml` | Priority order steps, starter EF $2k, follow-up questions |
+| `ai-behavior.yaml` | AI explainer tone, role, restrictions (rules decide — AI explains) |
+| `platform.yaml` | Cross-section conversation principles |
 
 ## Universal intake policy
 

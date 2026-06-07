@@ -2,13 +2,18 @@
 // Universal intake: parse everything the user gave, never re-ask filled fields.
 // IMPORTANT: We only output the full plan if the user explicitly asks for it.
 
+import { investmentAssessmentAnswer } from "@/lib/assessment-investment";
 import { intakeAcknowledgment } from "@/lib/intake-policy";
+import { tryDirectSectionAnswer } from "@/lib/section-qa";
 
 export type Msg = { role: "user" | "assistant"; content: string };
 
 const STARTER_EF_TARGET = 2000;
 
 export type ConversationState = {
+  intakeComplete?: boolean;
+  addressedConcerns?: string[];
+  lastConcernShown?: string;
   stage:
     | "match"
     | "starter_emergency"
@@ -240,6 +245,58 @@ function investmentContextSummary(d: ConversationState["data"]): string[] {
   return parts;
 }
 
+export function investmentStateFromForm(form: {
+  investAmount: number | null;
+  has401kMatch: boolean;
+  hasStarterEmergencyFund: boolean;
+  hasHighInterestDebt: boolean;
+  hasFullEmergencyFund: boolean;
+  hsaEligible: boolean;
+  hasRothIra: boolean;
+  maxing401k: boolean;
+}): ConversationState {
+  return {
+    stage: null,
+    data: {
+      investAmount: form.investAmount,
+      debtAmount: null,
+      has401kMatch: form.has401kMatch,
+      hasStarterEmergencyFund: form.hasStarterEmergencyFund,
+      hasHighInterestDebt: form.hasHighInterestDebt,
+      hasFullEmergencyFund: form.hasFullEmergencyFund,
+      hsaEligible: form.hsaEligible,
+      hasRothIra: form.hasRothIra,
+      maxing401k: form.maxing401k,
+    },
+  };
+}
+
+export function assessInvestmentState(state: ConversationState): FlowResult {
+  return {
+    answer: investmentAssessmentAnswer(state),
+    state: { ...state, stage: null },
+  };
+}
+
+export function handleInvestmentChat(
+  thread: Msg[],
+  incomingState?: ConversationState | null
+): FlowResult | null {
+  if (!incomingState?.intakeComplete) return null;
+  const state = initState(incomingState);
+  const last = thread[thread.length - 1];
+  const allUserText = thread
+    .filter((m) => m.role === "user")
+    .map((m) => m.content)
+    .join("\n");
+
+  if (userAsksForPlan(allUserText) || (last?.role === "user" && userAsksForPlan(last.content))) {
+    return assessInvestmentState(state);
+  }
+
+  return null;
+}
+
 function nextQuestion(state: ConversationState, wantsPlan: boolean): FlowResult {
   const d = state.data;
   const ack =
@@ -368,7 +425,7 @@ export function handleConversationalFlow(
 
   if (!mentionsInvest(allUserText)) return null;
 
-  const state = initState(incomingState);
+  let state = initState(incomingState);
   state.data = mergeKnown(state.data, extractSignalsFromText(allUserText));
 
   // If user never mentioned an invest amount, don't take over.
@@ -391,6 +448,30 @@ export function handleConversationalFlow(
     if (state.stage === "plan_offer" && yn) {
       // treat as a request for plan
     }
+  }
+
+  if (
+    last?.role === "user" &&
+    state.data.investAmount !== null &&
+    state.data.debtAmount !== null &&
+    state.data.debtAmount > state.data.investAmount &&
+    state.data.hasHighInterestDebt === false &&
+    !state.addressedConcerns?.includes("debt_vs_invest")
+  ) {
+    return {
+      answer:
+        `You mentioned **$${state.data.debtAmount.toLocaleString()}** in debt but said you don't have high-interest debt. ` +
+        `Is that debt low-rate (mortgage/student loans), or should we treat some of it as high-interest?`,
+      state: { ...state, stage: "high_interest_debt", lastConcernShown: "debt_vs_invest" },
+    };
+  }
+
+  if (state.lastConcernShown && last?.role === "user" && last.content.trim()) {
+    state = {
+      ...state,
+      addressedConcerns: [...(state.addressedConcerns ?? []), state.lastConcernShown],
+      lastConcernShown: undefined,
+    };
   }
 
   const wantsPlan = userAsksForPlan(allUserText) || (state.stage === "plan_offer" && yn === true);

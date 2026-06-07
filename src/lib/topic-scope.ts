@@ -175,7 +175,9 @@ export function checkTopicScope(
     }
     return {
       message:
-        "That does not look like a **car loan** question.\n\nYou can ask about loan term (max **48 months**), **20% down**, transportation budget (**10%** of income), or share your numbers. For **mortgage** or **other finance**, use **All topics**.",
+        "That’s outside **car loan** rules in this app.\n\n" +
+        "Here you can ask about **48-month max term**, **20% down**, **10% transportation vs income**, or paste your numbers. " +
+        "For **mortgage** or **investing**, switch via **All topics**.",
       preserveState: true,
     };
   }

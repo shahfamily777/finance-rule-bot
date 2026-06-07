@@ -170,3 +170,26 @@ export function looksLikeBulkIntake(text: string): boolean {
   const amounts = text.match(/\d[\d,]*(?:\.\d+)?\s*(?:k|m|b)?/gi);
   return (amounts?.length ?? 0) >= 2 || (amounts?.length === 1 && /,/.test(text));
 }
+
+export function parseYesNo(message: string): boolean | null {
+  const m = message.trim().toLowerCase();
+  if (["y", "yes", "yeah", "yep", "sure", "true", "ok", "okay"].includes(m)) return true;
+  if (["n", "no", "nope", "false"].includes(m)) return false;
+  if (/\b(i\s+do|i\s+have|i\s+have enough|yes|yeah|yep|correct|affirmative)\b/i.test(m)) {
+    return true;
+  }
+  if (/\b(i\s+don'?t|i\s+do\s+not|i\s+dont|no|nope|not enough|can\'?t)\b/i.test(m)) {
+    return false;
+  }
+  return null;
+}
+
+/** Short income reply (e.g. "30k", "30000") when not a rate or term. */
+export function parseIncomeShortReply(text: string): number | null {
+  if (/%/.test(text) || /\bmonths?\b/i.test(text) || /\byears?\b/i.test(text)) return null;
+  const trimmed = text.trim();
+  if (!/^[\d$,.\s]+(?:k|m|b)?$/i.test(trimmed)) return null;
+  const amt = parseAmountToken(trimmed);
+  if (amt === null || amt < 500 || amt > 2_000_000) return null;
+  return amt;
+}

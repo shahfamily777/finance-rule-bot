@@ -17,6 +17,8 @@ intake:
     - Never re-ask for a field that is already filled.
     - Ask only the next missing field, or run the checklist when enough is known.
     - Acknowledge what you understood when the user provides several numbers at once.
+    - If numbers don't fit together (down > price, payment vs income, etc.), ask a short clarifying question before the next field.
+    - Sound like a person reviewing their situation — not a rigid form.
   field_order:
     - vehicle_price
     - down_payment

@@ -2,7 +2,7 @@
 // Source: specs/car.yaml, specs/mortgage.yaml, specs/investment.yaml
 // Regenerate: npm run specs:compile
 
-import type { CarSpec, InvestmentSpec, MortgageSpec } from "./types";
+import type { CarSpec, InvestmentSpec, MortgageSpec, PlatformSpec, AiBehaviorSpec, CostlyMistakesSpec } from "./types";
 
 export const carSpec = {
   "id": "car-loan",
@@ -16,7 +16,9 @@ export const carSpec = {
       "Parse ALL fields the user gives in one message or across the thread.",
       "Never re-ask for a field that is already filled.",
       "Ask only the next missing field, or run the checklist when enough is known.",
-      "Acknowledge what you understood when the user provides several numbers at once."
+      "Acknowledge what you understood when the user provides several numbers at once.",
+      "If numbers don't fit together (down > price, payment vs income, etc.), ask a short clarifying question before the next field.",
+      "Sound like a person reviewing their situation — not a rigid form."
     ],
     "field_order": [
       "vehicle_price",
@@ -111,7 +113,9 @@ export const mortgageSpec = {
     "policy": [
       "Parse ALL fields the user gives; never re-ask filled fields.",
       "Ask only the next missing field, or run the assessment when enough is known.",
-      "Acknowledge bundled numbers when the user provides several at once."
+      "Acknowledge bundled numbers when the user provides several at once.",
+      "If something looks off (down > price, housing cost vs income), ask before moving on.",
+      "Accept yes/no on cash readiness; don't loop on the same question."
     ],
     "purchase_field_order": [
       "home_price",
@@ -152,7 +156,7 @@ export const mortgageSpec = {
       "question": "Estimated closing costs? (If unsure, many buyers use ~{estimated_closing_cost_pct}% of price ≈ ${estimated_closing}.)"
     },
     "cash_available": {
-      "question": "Do you have enough cash on hand for down + closing + emergency fund combined? (Need about ${cash_needed_total} — not borrowed.)"
+      "question": "Do you have enough cash on hand for down + closing + emergency fund combined? (Need about ${cash_needed_total} — not borrowed.) Reply yes, no, or a dollar amount."
     },
     "interest_rate_pct": {
       "question": "What mortgage interest rate do you expect? (e.g. 6.25%)"
@@ -161,13 +165,13 @@ export const mortgageSpec = {
       "question": "Loan term — 15 or 30 years? (Only these two fit our rules.)"
     },
     "monthly_property_tax": {
-      "question": "What are monthly property taxes? (Or say “estimate”.)"
+      "question": "What are monthly property taxes for this home? (Required.)"
     },
     "monthly_insurance": {
-      "question": "What is monthly homeowners insurance? (Or say “estimate”.)"
+      "question": "What is monthly homeowners insurance? (Required.)"
     },
     "monthly_hoa_maintenance": {
-      "question": "Monthly HOA + maintenance/repairs? (Or say “estimate” — we use ~{hidden_cost_pct_default}% of mortgage+tax+insurance for hidden costs.)"
+      "question": "Monthly HOA or maintenance? (Optional — enter 0 or none if not applicable.)"
     },
     "current_rate_pct": {
       "question": "What is your current mortgage rate? (e.g. 6.5%)"
@@ -199,7 +203,7 @@ export const mortgageSpec = {
       "emergency_fund"
     ]
   },
-  "rules_summary": "Mortgage rules in this app:\n• {loan_terms_label} loan only\n• Refinance when rate drops ≥{refinance_rate_drop_min_pct}%\n• Before buying: {min_down_payment_pct}% down + closing costs + emergency fund in cash (else keep renting)\n• Extra payoff encouraged when rate >{high_rate_extra_payoff_pct}%\n• Total housing ≤ {max_housing_pct_of_gross}% of gross monthly income (PITI + tax + insurance + ~{hidden_cost_pct_low}–{hidden_cost_pct_high}% hidden)\n",
+  "rules_summary": "Mortgage rules in this app:\n• {loan_terms_label} loan only\n• Refinance when rate drops ≥{refinance_rate_drop_min_pct}%\n• Before buying: {min_down_payment_pct}% down + closing costs + emergency fund in cash (else keep renting)\n• Extra payoff encouraged when rate >{high_rate_extra_payoff_pct}%\n• Total housing ≤ {max_housing_pct_of_gross}% of gross monthly income (PITI + tax + insurance + HOA if any)\n• Assessment shows max affordable home price at the {max_housing_pct_of_gross}% cap\n",
   "direct_answers": {
     "loan_terms_invalid": "We only use 15- or 30-year mortgages here — not 40-year or other terms.",
     "refinance_rule": "Refinance when the new rate is at least {refinance_rate_drop_min_pct} percentage point lower than your current rate.",
@@ -312,6 +316,717 @@ export const investmentSpec = {
     "plan_prompt": "give me the full plan"
   }
 } as const satisfies InvestmentSpec;
+
+export const platformSpec = {
+  "conversation": {
+    "principles": [
+      "Start each section with the intake form; run assessment/plan from submitted fields, then open chat for rule Q&A.",
+      "To change numbers, user returns to the form (not mid-chat intake).",
+      "Follow fixed rules in specs — never bend them or guess from the internet.",
+      "Stay in the active section (car / mortgage / investment); redirect other topics politely.",
+      "Parse everything the user already said; only ask for what is still missing.",
+      "If numbers conflict, ask one short human clarification — do not repeat the same paragraph.",
+      "Never send the same assistant message twice in a row; rephrase or advance the flow.",
+      "Answer rule questions directly when asked; do not force the intake checklist first."
+    ],
+    "tone": [
+      "Direct and warm, like a knowledgeable friend — not a form wizard.",
+      "Short acknowledgments; no wall of repeated \"Got it\" lines."
+    ],
+    "when_confused": [
+      "Ask one targeted question.",
+      "Offer yes/no or an example format when helpful."
+    ]
+  }
+} as const satisfies PlatformSpec;
+
+export const aiBehaviorSpec = {
+  "core_principle": "Rules decide. AI explains.",
+  "role": {
+    "should": [
+      "Explain assessments and checklist results in plain language",
+      "Simplify concepts and tradeoffs",
+      "Answer guided follow-up questions within the active topic",
+      "Provide calm reasoning tied to fixed rules in specs",
+      "Reference the user's saved numbers when available"
+    ],
+    "should_not": [
+      "Invent financial advice or override rule-engine outcomes",
+      "Recommend specific stocks, funds, or securities",
+      "Guarantee returns or promise outcomes",
+      "Act like a licensed human financial advisor",
+      "Behave as a generic open-ended chatbot"
+    ]
+  },
+  "tone": {
+    "qualities": [
+      "calm",
+      "rational",
+      "practical",
+      "emotionally steady",
+      "concise"
+    ],
+    "avoid": [
+      "fear tactics",
+      "shame or judgment",
+      "hype or guru language",
+      "giant paragraphs"
+    ]
+  },
+  "philosophy": [
+    "Simplicity over optimization",
+    "Intentional spending",
+    "Long-term stability",
+    "Reduced financial stress",
+    "Consistent investing"
+  ],
+  "output_style": [
+    "Keep responses short and actionable (usually 2–4 short paragraphs)",
+    "Explain WHY something creates stress or rigidity (e.g. longer loans lower monthly payment but increase total burden)",
+    "Explain tradeoffs clearly",
+    "Use bold sparingly for key numbers only"
+  ],
+  "assessment_explanation": {
+    "focus_on": [
+      "affordability",
+      "flexibility after the decision",
+      "reducing ongoing financial stress"
+    ],
+    "approach": [
+      "Explain risks calmly — never alarmist",
+      "Do not shame the user for their numbers",
+      "Tie explanations to the fixed rules, not opinion"
+    ]
+  },
+  "follow_up": {
+    "use_guided_prompts": true,
+    "examples": [
+      "Why is this risky?",
+      "Compare 48 vs 72 months",
+      "What payment is safer?",
+      "What if my income grows?"
+    ],
+    "behavior": [
+      "Stay focused on the current section (car / mortgage / investment)",
+      "Answer within fixed rules for that topic"
+    ]
+  },
+  "off_topic": {
+    "behavior": [
+      "Redirect politely back to financial guidance in the active section",
+      "Do not engage in unrelated conversation",
+      "Do not become a general-purpose assistant"
+    ],
+    "redirect_template": "I'm here for **{section}** guidance using this app's fixed rules — not general chat.\nAsk about your assessment, a guided question above, or use **All topics** to switch sections.\n"
+  },
+  "investment": {
+    "note": "Priority order comes from investment.yaml (compiled specs) — never invent a different order.",
+    "philosophy": [
+      "Follow the numbered priority order from specs",
+      "No stock picks; low-cost diversified index funds only when discussing brokerage step",
+      "Emergency fund and high-interest debt before aggressive investing"
+    ]
+  },
+  "car_loan": {
+    "philosophy": [
+      "Affordability and manageable payments",
+      "Shorter terms when reasonable; 48 months is the app maximum",
+      "Avoid lifestyle pressure — cheaper car, more down, or wait beat longer loans"
+    ]
+  },
+  "mortgage": {
+    "philosophy": [
+      "Affordability and manageable monthly burden",
+      "Emergency reserves and cash readiness before buying",
+      "Flexibility after purchase — don't stretch to the limit"
+    ]
+  },
+  "can_i_buy_this": {
+    "status": "future",
+    "philosophy": [
+      "Intentional spending and conscious consumption",
+      "Affordability without stress",
+      "Do not discourage all spending — help users decide clearly"
+    ]
+  },
+  "restrictions": {
+    "never": [
+      "Recommend specific securities",
+      "Guarantee returns",
+      "Promise outcomes",
+      "Override or bend fixed rules",
+      "Contradict the rule engine assessment"
+    ]
+  },
+  "disclaimer": "Rule-based educational guidance. Not financial advice.",
+  "product_goal": "Users should feel \"This helped me think more clearly.\""
+} as const satisfies AiBehaviorSpec;
+
+export const costlyMistakesSpec = {
+  "id": "costly-mistakes",
+  "meta": {
+    "label": "Avoid Costly Mistakes",
+    "blurb": "Understand major financial decisions before committing.",
+    "hub_intro": "Most wealth is built or lost through a small number of large decisions.\nThis module helps you understand big financial commitments — costs, incentives,\nand alternatives — before you sign.\n"
+  },
+  "intro": "Most people focus on small expenses while ignoring major financial commitments.\nWealth is often built or lost through a small number of large decisions. This\nmodule helps you slow down and understand the big ones.\n",
+  "principle": "We do not present products as scams. Many have legitimate uses. The goal is to\nhelp you understand the costs, tradeoffs, incentives, risks, and alternatives —\nso you can decide clearly, not from pressure.\n",
+  "disclaimer": "Educational guidance only. Not financial, tax, insurance, or legal advice.",
+  "ai": {
+    "should": [
+      "Explain what a product or decision is in plain language",
+      "Explain why people buy it and who genuinely benefits",
+      "Lay out costs, tradeoffs, incentives, and lower-cost alternatives",
+      "Stay calm, neutral, and educational",
+      "Help the user leave understanding the decision better"
+    ],
+    "should_not": [
+      "Call products scams, fraud, or rip-offs",
+      "Make legal accusations or inflammatory claims",
+      "Pressure the user toward a specific decision",
+      "Guarantee outcomes or give individualized financial/tax/legal advice"
+    ],
+    "tone": [
+      "calm",
+      "neutral",
+      "educational",
+      "non-judgmental"
+    ],
+    "example_style": {
+      "avoid": "This is a scam.",
+      "use": "This product may be more complex and expensive than lower-cost alternatives."
+    }
+  },
+  "topics": [
+    {
+      "id": "iul",
+      "name": "Indexed Universal Life (IUL)",
+      "emoji": "🧩",
+      "category": "insurance-investment",
+      "status": "available",
+      "tagline": "A complex life-insurance and investment hybrid.",
+      "what_is_it": "Indexed Universal Life is permanent life insurance with a cash-value account\nwhose growth is tied to a market index (like the S&P 500), subject to caps,\nfloors, and participation rates set by the insurer. It combines a death\nbenefit with a tax-advantaged savings component in one product.\n",
+      "why_people_buy": [
+        "The pitch of \"market-linked growth with no downside\" sounds appealing",
+        "Tax-deferred cash-value growth and tax-free policy loans",
+        "A permanent death benefit that doesn't expire like term insurance",
+        "Often sold as a flexible \"do-it-all\" retirement and protection vehicle"
+      ],
+      "costs": [
+        "High commissions and fees come out of early premiums, so cash value grows slowly at first",
+        "Cost of insurance rises as you age and can erode cash value",
+        "Index gains are capped, and caps/participation rates can be lowered by the insurer",
+        "Surrendering early often means surrender charges and little or no cash value back",
+        "Illustrations frequently assume optimistic returns that may not materialize"
+      ],
+      "who_benefits": [
+        "High earners who have already maxed out 401(k)s, IRAs, and HSAs",
+        "People with a genuine permanent (lifelong) insurance need, such as estate planning",
+        "The agent and insurer, who earn significant upfront commissions"
+      ],
+      "alternatives": [
+        "Term life insurance for protection, which is far cheaper for the same death benefit",
+        "Tax-advantaged accounts (401(k), Roth IRA, HSA) for tax-deferred growth",
+        "Low-cost index funds in a brokerage for flexible, transparent investing",
+        "Buy term and invest the difference: a simpler separation of needs"
+      ],
+      "questions_to_ask": [
+        "What are ALL the fees and the cost of insurance, in writing, year by year?",
+        "What is the guaranteed (not illustrated) cash value over 10 and 20 years?",
+        "What are the surrender charges if I stop or reduce premiums?",
+        "How is the cap set, and can the insurer change it later?",
+        "Have I already maxed out my 401(k), IRA, and HSA first?"
+      ],
+      "questions": [
+        {
+          "id": "goal",
+          "prompt": "What's mainly drawing you to an IUL?",
+          "type": "choice",
+          "options": [
+            {
+              "id": "protection",
+              "label": "Protecting my family if I die"
+            },
+            {
+              "id": "investing",
+              "label": "Tax-advantaged growth / retirement"
+            },
+            {
+              "id": "both",
+              "label": "Both, in one product"
+            }
+          ]
+        },
+        {
+          "id": "pressure",
+          "prompt": "Is a salesperson or agent pushing you to decide soon?",
+          "type": "yesno"
+        },
+        {
+          "id": "understands",
+          "prompt": "Do you fully understand the fees, caps, and cost of insurance?",
+          "type": "yesno"
+        },
+        {
+          "id": "compared",
+          "prompt": "Have you compared \"term life + index funds\" as an alternative?",
+          "type": "yesno"
+        }
+      ]
+    },
+    {
+      "id": "whole-life",
+      "name": "Whole Life Insurance",
+      "emoji": "🛡️",
+      "category": "insurance-investment",
+      "status": "available",
+      "tagline": "Permanent insurance with fixed premiums and slow-building cash value.",
+      "what_is_it": "Whole life is permanent life insurance with level premiums, a guaranteed\ndeath benefit, and a cash-value account that grows at a modest guaranteed\nrate (sometimes with dividends from mutual insurers). It's designed to last\nyour whole life as long as premiums are paid.\n",
+      "why_people_buy": [
+        "Lifelong coverage that never expires and premiums that never rise",
+        "Guaranteed, stable cash-value growth that feels safe",
+        "Tax-deferred growth and the ability to borrow against cash value",
+        "Often marketed for estate planning or \"forced savings\""
+      ],
+      "costs": [
+        "Premiums are often 5–15x higher than term life for the same death benefit",
+        "Cash value builds very slowly in the early years due to fees and commissions",
+        "Guaranteed returns are modest, often trailing simple long-term investing",
+        "Surrendering early can forfeit much of what you paid",
+        "Borrowing from the policy reduces the death benefit if not repaid"
+      ],
+      "who_benefits": [
+        "People with lifelong dependents or estate-tax planning needs",
+        "Those who genuinely cannot stay disciplined to save or invest separately",
+        "The agent and insurer through substantial first-year commissions"
+      ],
+      "alternatives": [
+        "Term life insurance to cover the years your family depends on your income",
+        "Investing the premium difference in tax-advantaged or index accounts",
+        "High-yield savings or bonds for the \"safe, guaranteed\" portion of a plan"
+      ],
+      "questions_to_ask": [
+        "How does the total cost compare to a 20- or 30-year term policy?",
+        "What is the guaranteed cash value at 10, 20, and 30 years?",
+        "How much of my first-year premium goes to commissions and fees?",
+        "Do I actually need coverage for my entire life, or just the next 20–30 years?",
+        "What happens if I can't keep paying the premium later?"
+      ],
+      "questions": [
+        {
+          "id": "goal",
+          "prompt": "What's the main reason you're considering whole life?",
+          "type": "choice",
+          "options": [
+            {
+              "id": "protection",
+              "label": "Income protection for my family"
+            },
+            {
+              "id": "investing",
+              "label": "Savings / cash-value growth"
+            },
+            {
+              "id": "estate",
+              "label": "Estate or legacy planning"
+            }
+          ]
+        },
+        {
+          "id": "pressure",
+          "prompt": "Is someone pressuring you to buy soon?",
+          "type": "yesno"
+        },
+        {
+          "id": "understands",
+          "prompt": "Do you understand how slowly cash value builds early on?",
+          "type": "yesno"
+        },
+        {
+          "id": "compared",
+          "prompt": "Have you priced out a comparable term-life policy?",
+          "type": "yesno"
+        }
+      ]
+    },
+    {
+      "id": "annuities",
+      "name": "Annuities",
+      "emoji": "📜",
+      "category": "insurance-investment",
+      "status": "available",
+      "tagline": "Insurance contracts that convert money into future income.",
+      "what_is_it": "An annuity is a contract with an insurer where you pay a lump sum or series\nof payments in exchange for future income, often in retirement. They range\nfrom simple (immediate fixed income) to very complex (variable and indexed\nannuities with riders, caps, and fees).\n",
+      "why_people_buy": [
+        "Desire for guaranteed lifetime income and protection against outliving savings",
+        "Tax-deferred growth on the money inside the contract",
+        "Fear of market volatility near or during retirement",
+        "Often sold as \"safe\" with attractive-sounding guarantees"
+      ],
+      "costs": [
+        "Variable and indexed annuities can carry high annual fees and rider charges",
+        "Surrender periods can lock up money for years with steep early-withdrawal penalties",
+        "Complexity makes it hard to compare true cost and value",
+        "Returns on complex annuities are often capped or lower than expected",
+        "Inflation can erode the value of fixed lifetime payments"
+      ],
+      "who_benefits": [
+        "Retirees who want a simple, low-cost guaranteed income floor (e.g. a SPIA)",
+        "People without pensions who fear outliving their money",
+        "The selling agent, especially on high-commission complex products"
+      ],
+      "alternatives": [
+        "A simple immediate or deferred income annuity (SPIA) instead of complex ones",
+        "Delaying Social Security to increase guaranteed inflation-adjusted income",
+        "A diversified withdrawal strategy from low-cost index funds and bonds",
+        "Bond ladders or Treasury Inflation-Protected Securities for stable income"
+      ],
+      "questions_to_ask": [
+        "What are the total annual fees, including riders, in writing?",
+        "How long is the surrender period and what are the penalties?",
+        "Is this a simple income annuity or a complex indexed/variable product?",
+        "How does the guaranteed income compare to delaying Social Security?",
+        "What happens to the balance if I die early?"
+      ],
+      "questions": [
+        {
+          "id": "goal",
+          "prompt": "What are you hoping an annuity will do for you?",
+          "type": "choice",
+          "options": [
+            {
+              "id": "income",
+              "label": "Guaranteed lifetime income"
+            },
+            {
+              "id": "safety",
+              "label": "Protect money from market drops"
+            },
+            {
+              "id": "investing",
+              "label": "Tax-deferred growth"
+            }
+          ]
+        },
+        {
+          "id": "pressure",
+          "prompt": "Is an agent urging you to act before an offer \"expires\"?",
+          "type": "yesno"
+        },
+        {
+          "id": "understands",
+          "prompt": "Do you understand the fees and surrender period?",
+          "type": "yesno"
+        },
+        {
+          "id": "compared",
+          "prompt": "Have you compared a simple SPIA or delaying Social Security?",
+          "type": "yesno"
+        }
+      ]
+    },
+    {
+      "id": "oversized-home",
+      "name": "Oversized Homes",
+      "emoji": "🏰",
+      "category": "big-purchase",
+      "status": "available",
+      "tagline": "Buying more house than your life and budget need.",
+      "what_is_it": "An oversized home is a purchase that's larger or more expensive than your\nhousehold actually needs or can comfortably afford — often justified by\n\"growing into it,\" resale, or status. The risk isn't the house itself, but\nthe ongoing financial weight it creates.\n",
+      "why_people_buy": [
+        "Anticipating future needs (kids, guests, working from home)",
+        "Status, lifestyle, or keeping up with peers",
+        "Belief that a bigger home is always a better investment",
+        "Lenders approving a larger loan than is comfortable to carry"
+      ],
+      "costs": [
+        "Higher mortgage, property taxes, and insurance every month for decades",
+        "More to heat, cool, furnish, maintain, and repair",
+        "Larger down payment ties up cash that could build flexibility",
+        "Less monthly room for saving, investing, and emergencies",
+        "Harder to sell quickly if the market or your situation changes"
+      ],
+      "who_benefits": [
+        "Families who genuinely use the space for years, not \"someday\"",
+        "Real-estate agents and lenders, whose fees scale with price",
+        "Furniture, utility, and maintenance providers"
+      ],
+      "alternatives": [
+        "Buy for your real needs now and move later if life changes",
+        "Keep total housing costs at or below ~35% of gross income (our mortgage rule)",
+        "Direct the savings into investments, flexibility, and an emergency fund",
+        "Rent the extra space you'd only occasionally use"
+      ],
+      "questions_to_ask": [
+        "How much will the total monthly cost (mortgage, tax, insurance, upkeep) be?",
+        "Does this keep housing at or under 35% of my gross income?",
+        "Am I buying for how I live now, or for a \"someday\" that may not come?",
+        "What could I do with the money the extra space costs each month?",
+        "How easily could I sell or downsize if my situation changed?"
+      ],
+      "questions": [
+        {
+          "id": "goal",
+          "prompt": "Why are you considering the larger home?",
+          "type": "choice",
+          "options": [
+            {
+              "id": "need",
+              "label": "We genuinely need the space now"
+            },
+            {
+              "id": "future",
+              "label": "Planning for the future / someday"
+            },
+            {
+              "id": "status",
+              "label": "Lifestyle, resale, or keeping up"
+            }
+          ]
+        },
+        {
+          "id": "pressure",
+          "prompt": "Do you feel rushed by the market or an agent?",
+          "type": "yesno"
+        },
+        {
+          "id": "understands",
+          "prompt": "Have you added up the full monthly cost beyond the mortgage?",
+          "type": "yesno"
+        },
+        {
+          "id": "compared",
+          "prompt": "Have you compared a smaller home and investing the difference?",
+          "type": "yesno"
+        }
+      ]
+    },
+    {
+      "id": "expensive-vehicle",
+      "name": "Expensive Vehicles",
+      "emoji": "🏎️",
+      "category": "big-purchase",
+      "status": "available",
+      "tagline": "A depreciating asset that can quietly drain monthly cash flow.",
+      "what_is_it": "An expensive vehicle is one whose purchase price, financing, insurance, and\nrunning costs take more of your income than your plan can comfortably carry.\nCars lose value over time, so overspending here converts savings into\ndepreciation.\n",
+      "why_people_buy": [
+        "Status, identity, and enjoyment",
+        "Long loan terms make a pricey car feel \"affordable\" monthly",
+        "Underestimating insurance, fuel, and maintenance costs",
+        "Dealer financing and add-ons that obscure the true cost"
+      ],
+      "costs": [
+        "Rapid depreciation, especially in the first few years",
+        "Higher insurance, registration, fuel, and maintenance",
+        "Long loans (60–84 months) increase total interest and upside-down risk",
+        "Monthly payments crowd out saving and investing",
+        "Add-ons and warranties inflate the financed amount"
+      ],
+      "who_benefits": [
+        "People who keep a reliable car for many years and truly value it",
+        "Dealers, lenders, and add-on/warranty sellers",
+        "Insurers, through higher premiums on costlier vehicles"
+      ],
+      "alternatives": [
+        "Keep transportation (payment + insurance + fuel) under ~10% of gross income (our car rule)",
+        "Choose a reliable used or modest new car and finance 48 months or less",
+        "Buy with more down to shrink the loan and payment",
+        "Keep a paid-off car longer and invest the would-be payment"
+      ],
+      "questions_to_ask": [
+        "What is the total monthly cost — payment, insurance, fuel, and upkeep?",
+        "Does that stay under 10% of my gross income?",
+        "Is the loan term 48 months or less?",
+        "How much will this car be worth in 3–5 years?",
+        "What am I giving up monthly to drive this instead of a cheaper option?"
+      ],
+      "questions": [
+        {
+          "id": "goal",
+          "prompt": "What's driving the choice of a more expensive vehicle?",
+          "type": "choice",
+          "options": [
+            {
+              "id": "need",
+              "label": "Reliability and real needs"
+            },
+            {
+              "id": "enjoyment",
+              "label": "Enjoyment / something I want"
+            },
+            {
+              "id": "status",
+              "label": "Status or image"
+            }
+          ]
+        },
+        {
+          "id": "pressure",
+          "prompt": "Is a dealer pushing financing or add-ons today?",
+          "type": "yesno"
+        },
+        {
+          "id": "understands",
+          "prompt": "Have you totaled insurance, fuel, and maintenance too?",
+          "type": "yesno"
+        },
+        {
+          "id": "compared",
+          "prompt": "Have you compared a cheaper reliable option and investing the difference?",
+          "type": "yesno"
+        }
+      ]
+    },
+    {
+      "id": "high-fee-advisor",
+      "name": "High Fee Advisors",
+      "emoji": "💼",
+      "category": "advisor",
+      "status": "available",
+      "tagline": "Good advice is worth paying for — but fees compound against you.",
+      "what_is_it": "A high-fee advisor charges well above low-cost norms — often around 1%+ of\nyour assets every year, or sells commission-based products. Advice can be\nvaluable, but high ongoing fees compound over decades and can quietly consume\na large share of your returns.\n",
+      "why_people_buy": [
+        "Wanting professional help and reassurance with money decisions",
+        "Lack of time, interest, or confidence to manage investments alone",
+        "Trusting a personable advisor or a referral from friends/family",
+        "Not realizing how much a 1%+ annual fee costs over 20–30 years"
+      ],
+      "costs": [
+        "A 1% annual fee can consume a large fraction of lifetime returns through compounding",
+        "Commission-based advisors may face conflicts of interest in what they sell",
+        "Layered fees (advisor fee + fund fees) can stack up",
+        "Sometimes \"free\" advice is actually paid for through product commissions"
+      ],
+      "who_benefits": [
+        "People who need real, ongoing planning and will act on it",
+        "Those who would otherwise make costly behavioral mistakes alone",
+        "The advisor and firm, whose revenue scales with your balance or sales"
+      ],
+      "alternatives": [
+        "A fee-only fiduciary advisor paid a flat or hourly fee",
+        "A one-time or as-needed financial plan instead of ongoing AUM fees",
+        "Low-cost index funds or target-date funds for a simple portfolio",
+        "Robo-advisors for low-cost automated management"
+      ],
+      "questions_to_ask": [
+        "Are you a fiduciary 100% of the time, in writing?",
+        "Exactly how are you paid — fees, commissions, or both?",
+        "What is my all-in annual cost, including fund fees, in dollars?",
+        "What would a flat-fee or hourly arrangement cost instead?",
+        "What specifically do I get each year for this fee?"
+      ],
+      "questions": [
+        {
+          "id": "goal",
+          "prompt": "What do you want an advisor to help with most?",
+          "type": "choice",
+          "options": [
+            {
+              "id": "planning",
+              "label": "A financial plan / big decisions"
+            },
+            {
+              "id": "investing",
+              "label": "Managing my investments"
+            },
+            {
+              "id": "reassurance",
+              "label": "Reassurance and accountability"
+            }
+          ]
+        },
+        {
+          "id": "pressure",
+          "prompt": "Is the advisor steering you toward products they sell?",
+          "type": "yesno"
+        },
+        {
+          "id": "understands",
+          "prompt": "Do you know your all-in annual cost in dollars?",
+          "type": "yesno"
+        },
+        {
+          "id": "compared",
+          "prompt": "Have you compared a fee-only or flat-fee advisor?",
+          "type": "yesno"
+        }
+      ]
+    },
+    {
+      "id": "timeshare",
+      "name": "Timeshares",
+      "emoji": "🏝️",
+      "category": "big-purchase",
+      "status": "future",
+      "tagline": "Prepaid vacations that are easy to buy and hard to exit.",
+      "what_is_it": "A timeshare gives you the right to use a vacation property for a set period\neach year, with ongoing maintenance fees. They're known for high-pressure\nsales and for being difficult and costly to resell or exit.\n",
+      "why_people_buy": [
+        "The appeal of guaranteed future vacations at a \"locked-in\" price",
+        "High-pressure presentations with limited-time incentives",
+        "Underestimating rising annual maintenance fees",
+        "Believing it's an investment that holds value"
+      ],
+      "costs": [
+        "Upfront purchase price plus perpetual, often-rising maintenance fees",
+        "Very low or negative resale value",
+        "Difficult and sometimes expensive to exit the contract",
+        "Limited flexibility on dates and locations"
+      ],
+      "who_benefits": [
+        "Frequent visitors to one resort who will genuinely use it for years",
+        "The developer and sales organization, through high margins"
+      ],
+      "alternatives": [
+        "Booking vacations as you go, keeping full flexibility",
+        "Renting a timeshare week from an existing owner to \"try before buying\"",
+        "Saving a dedicated travel fund and investing it until needed"
+      ],
+      "questions_to_ask": [
+        "What are the annual maintenance fees, and how fast have they risen?",
+        "What is the realistic resale value if I want out?",
+        "How hard is it to exit this contract?",
+        "Would renting or booking trips cost less over 10 years?",
+        "Am I deciding under sales pressure right now?"
+      ],
+      "questions": [
+        {
+          "id": "goal",
+          "prompt": "What's the appeal of the timeshare?",
+          "type": "choice",
+          "options": [
+            {
+              "id": "need",
+              "label": "We vacation here every year anyway"
+            },
+            {
+              "id": "deal",
+              "label": "It feels like a good deal / investment"
+            },
+            {
+              "id": "pressure",
+              "label": "We're in a presentation right now"
+            }
+          ]
+        },
+        {
+          "id": "pressure",
+          "prompt": "Are you being pressured to sign today?",
+          "type": "yesno"
+        },
+        {
+          "id": "understands",
+          "prompt": "Do you know the annual fees and how to exit later?",
+          "type": "yesno"
+        },
+        {
+          "id": "compared",
+          "prompt": "Have you compared just booking trips as you go?",
+          "type": "yesno"
+        }
+      ]
+    }
+  ]
+} as const satisfies CostlyMistakesSpec;
 export const HUB_SECTIONS = [
   { id: carSpec.id, label: carSpec.meta.label, blurb: carSpec.meta.blurb },
   { id: mortgageSpec.id, label: mortgageSpec.meta.label, blurb: mortgageSpec.meta.blurb },

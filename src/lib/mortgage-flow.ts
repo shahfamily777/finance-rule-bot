@@ -3,8 +3,21 @@ import {
   parseAprPercent,
   parseDownPaymentAmount,
   parseGrossMonthlyIncome,
+  parseIncomeShortReply,
   parsePurchasePrice,
+  parseYesNo,
 } from "@/lib/intake-policy";
+import {
+  acknowledgeLastConcern,
+  autoResolveMortgageConcerns,
+  pickMortgageConcern,
+} from "@/lib/conversational-intake";
+import {
+  applyMortgageCorrections,
+  looksLikeDataCorrection,
+} from "@/lib/field-corrections";
+import { mortgageAssessmentAnswer } from "@/lib/assessment-mortgage";
+import { monthlyPrincipalAndInterest } from "@/lib/loan-math";
 import { MORTGAGE_RULES } from "@/lib/mortgage-rules";
 import { tryDirectSectionAnswer } from "@/lib/section-qa";
 
@@ -28,7 +41,10 @@ export type MortgageStage =
   | null;
 
 export type MortgageConversationState = {
+  intakeComplete?: boolean;
   stage: MortgageStage;
+  addressedConcerns?: string[];
+  lastConcernShown?: string;
   data: {
     isRefinance: boolean | null;
     homePrice: number | null;
@@ -200,18 +216,6 @@ export function isMortgageFlowActive(
   );
 }
 
-function monthlyPrincipalAndInterest(
-  loanAmount: number,
-  annualRatePct: number,
-  termYears: number
-): number {
-  if (loanAmount <= 0) return 0;
-  const r = annualRatePct / 100 / 12;
-  const n = termYears * 12;
-  if (r === 0) return loanAmount / n;
-  return (loanAmount * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-}
-
 function estimateClosingCosts(homePrice: number): number {
   return Math.round(homePrice * (R.ESTIMATED_CLOSING_COST_PCT / 100));
 }
@@ -227,6 +231,164 @@ function estimateMonthlyInsurance(homePrice: number): number {
 function downPaymentPct(d: MortgageConversationState["data"]): number | null {
   if (d.homePrice === null || d.downPayment === null || d.homePrice <= 0) return null;
   return (d.downPayment / d.homePrice) * 100;
+}
+
+function requiredCashTotal(d: MortgageConversationState["data"]): number | null {
+  if (d.downPayment === null || d.emergencyFund === null || d.homePrice === null) return null;
+  const closing = d.closingCosts ?? estimateClosingCosts(d.homePrice);
+  return d.downPayment + closing + d.emergencyFund;
+}
+
+function syncMortgageSignalsFromThread(
+  state: MortgageConversationState,
+  thread: Msg[]
+): void {
+  const blob = thread
+    .filter((m) => m.role === "user")
+    .map((m) => m.content)
+    .join("\n");
+  state.data = mergeKnown(state.data, extractMortgageSignals(blob));
+}
+
+export function assessMortgageState(state: MortgageConversationState): FlowResult {
+  return {
+    answer: mortgageAssessmentAnswer(state),
+    state: { ...state, stage: null },
+  };
+}
+
+export function mortgageStateFromForm(
+  form: import("@/lib/form-types").MortgageFormValues
+): MortgageConversationState {
+  if (form.scenario === "refinance") {
+    return {
+      stage: null,
+      data: {
+        isRefinance: true,
+        homePrice: null,
+        grossMonthlyIncome: null,
+        downPayment: null,
+        closingCosts: null,
+        emergencyFund: null,
+        cashAvailable: null,
+        loanTermYears: form.loanTermYears,
+        interestRatePct: null,
+        monthlyPropertyTax: null,
+        monthlyInsurance: null,
+        monthlyHoaMaintenance: null,
+        currentRatePct: form.currentRatePct,
+        newRatePct: form.newRatePct,
+      },
+    };
+  }
+
+  const closing =
+    form.closingCosts ??
+    (form.homePrice > 0 ? estimateClosingCosts(form.homePrice) : null);
+  const required =
+    form.downPayment + (closing ?? 0) + form.emergencyFund;
+  const cashAvailable =
+    form.cashReady === "yes"
+      ? required
+      : form.cashAvailable ?? 0;
+
+  return {
+    stage: null,
+    data: {
+      isRefinance: false,
+      homePrice: form.homePrice,
+      grossMonthlyIncome: form.grossMonthlyIncome,
+      downPayment: form.downPayment,
+      closingCosts: closing,
+      emergencyFund: form.emergencyFund,
+      cashAvailable,
+      loanTermYears: form.loanTermYears,
+      interestRatePct: form.interestRatePct,
+      monthlyPropertyTax: form.monthlyPropertyTax,
+      monthlyInsurance: form.monthlyInsurance,
+      monthlyHoaMaintenance: form.monthlyHoaMaintenance,
+      currentRatePct: null,
+      newRatePct: null,
+    },
+  };
+}
+
+function monthlyHoaAmount(d: MortgageConversationState["data"]): number {
+  return d.monthlyHoaMaintenance ?? 0;
+}
+
+function resolveTaxAndInsurance(
+  d: MortgageConversationState["data"],
+  allowEstimate: boolean
+): { tax: number | null; ins: number | null } {
+  const tax =
+    d.monthlyPropertyTax ??
+    (allowEstimate && d.homePrice !== null ? estimateMonthlyTax(d.homePrice) : null);
+  const ins =
+    d.monthlyInsurance ??
+    (allowEstimate && d.homePrice !== null ? estimateMonthlyInsurance(d.homePrice) : null);
+  return { tax, ins };
+}
+
+/** Total monthly housing at a given price (tax/ins scale with price from the home you entered). */
+function totalHousingAtPrice(
+  price: number,
+  d: MortgageConversationState["data"],
+  tax: number,
+  ins: number
+): number | null {
+  if (
+    d.downPayment === null ||
+    d.interestRatePct === null ||
+    d.loanTermYears === null ||
+    d.homePrice === null ||
+    d.homePrice <= 0
+  ) {
+    return null;
+  }
+  const loan = Math.max(0, price - d.downPayment);
+  const pi = monthlyPrincipalAndInterest(loan, d.interestRatePct, d.loanTermYears);
+  const scale = price / d.homePrice;
+  return pi + tax * scale + ins * scale + monthlyHoaAmount(d);
+}
+
+/** Max purchase price that keeps housing ≤ 35% of gross (same down, rate, term; tax/ins scale with price). */
+function maxAffordableHomePrice(
+  d: MortgageConversationState["data"],
+  tax: number,
+  ins: number
+): number | null {
+  if (
+    d.grossMonthlyIncome === null ||
+    d.downPayment === null ||
+    d.interestRatePct === null ||
+    d.loanTermYears === null ||
+    d.homePrice === null ||
+    d.homePrice <= 0
+  ) {
+    return null;
+  }
+  const cap = d.grossMonthlyIncome * (R.MAX_HOUSING_PCT_OF_GROSS_INCOME / 100);
+  const minPrice = d.downPayment;
+  const fits = (price: number) => {
+    const total = totalHousingAtPrice(price, d, tax, ins);
+    return total !== null && total <= cap;
+  };
+  if (!fits(minPrice)) return null;
+
+  let lo = minPrice;
+  let hi = Math.max(d.homePrice, minPrice + 500_000);
+  let best = minPrice;
+  for (let i = 0; i < 40 && lo <= hi; i++) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (fits(mid)) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return best;
 }
 
 function buildPurchaseAssessment(state: MortgageConversationState): FlowResult {
@@ -259,27 +421,22 @@ function buildPurchaseAssessment(state: MortgageConversationState): FlowResult {
       ? monthlyPrincipalAndInterest(loanAmount, d.interestRatePct, d.loanTermYears)
       : null;
 
-  const tax =
-    d.monthlyPropertyTax ??
-    (d.homePrice !== null ? estimateMonthlyTax(d.homePrice) : null);
-  const ins =
-    d.monthlyInsurance ??
-    (d.homePrice !== null ? estimateMonthlyInsurance(d.homePrice) : null);
-
-  const piti = pi !== null && tax !== null && ins !== null ? pi + tax + ins : null;
-  const hidden =
-    d.monthlyHoaMaintenance !== null && d.monthlyHoaMaintenance > 0
-      ? d.monthlyHoaMaintenance
-      : piti !== null
-        ? Math.round(piti * (R.HIDDEN_COST_PCT_DEFAULT / 100))
-        : null;
-  const totalHousing = piti !== null && hidden !== null ? piti + hidden : null;
+  const { tax, ins } = resolveTaxAndInsurance(d, true);
+  const hoa = monthlyHoaAmount(d);
+  const totalHousing =
+    pi !== null && tax !== null && ins !== null ? pi + tax + ins + hoa : null;
+  const housingCap =
+    d.grossMonthlyIncome !== null
+      ? d.grossMonthlyIncome * (R.MAX_HOUSING_PCT_OF_GROSS_INCOME / 100)
+      : null;
   const housingPct =
     totalHousing !== null && d.grossMonthlyIncome !== null && d.grossMonthlyIncome > 0
       ? (totalHousing / d.grossMonthlyIncome) * 100
       : null;
   const housingOk =
     housingPct !== null && housingPct <= R.MAX_HOUSING_PCT_OF_GROSS_INCOME;
+  const maxPrice =
+    tax !== null && ins !== null ? maxAffordableHomePrice(d, tax, ins) : null;
 
   const lines: string[] = [];
   lines.push("Mortgage assessment (home purchase):");
@@ -317,9 +474,28 @@ function buildPurchaseAssessment(state: MortgageConversationState): FlowResult {
       lines.push(`  → Above ${R.HIGH_RATE_EXTRA_PAYOFF_PCT}%: prioritize extra principal payments.`);
     }
   }
+  if (housingCap !== null) {
+    lines.push("");
+    lines.push(`**Affordability (≤${R.MAX_HOUSING_PCT_OF_GROSS_INCOME}% of gross income):**`);
+    lines.push(
+      `• Max monthly housing budget: **$${Math.round(housingCap).toLocaleString()}/mo** (${R.MAX_HOUSING_PCT_OF_GROSS_INCOME}% of $${d.grossMonthlyIncome!.toLocaleString()} gross)`
+    );
+    if (maxPrice !== null) {
+      const over =
+        d.homePrice !== null && d.homePrice > maxPrice
+          ? ` — your price is **$${(d.homePrice - maxPrice).toLocaleString()}** above this`
+          : d.homePrice !== null && d.homePrice <= maxPrice
+            ? " — your price fits"
+            : "";
+      lines.push(
+        `• Estimated **max home price** at this down payment, rate, and term (tax/insurance scale with price): **$${maxPrice.toLocaleString()}**${over}`
+      );
+    }
+  }
+
   if (totalHousing !== null && housingPct !== null) {
     lines.push("");
-    lines.push("Monthly housing cost (estimated):");
+    lines.push("Monthly housing cost (your numbers):");
     if (pi !== null) lines.push(`  • Principal & interest: $${Math.round(pi).toLocaleString()}`);
     if (tax !== null) {
       lines.push(
@@ -331,14 +507,17 @@ function buildPurchaseAssessment(state: MortgageConversationState): FlowResult {
         `  • Insurance: $${Math.round(ins).toLocaleString()}${d.monthlyInsurance === null ? " (estimated)" : ""}`
       );
     }
-    if (hidden !== null) {
-      lines.push(
-        `  • HOA / maintenance / hidden (~${R.HIDDEN_COST_PCT_DEFAULT}% of PITI): $${Math.round(hidden).toLocaleString()}${d.monthlyHoaMaintenance === null ? " (estimated)" : ""}`
-      );
+    if (hoa > 0) {
+      lines.push(`  • HOA / maintenance: $${Math.round(hoa).toLocaleString()}`);
     }
     lines.push(
       `  • **Total: $${Math.round(totalHousing).toLocaleString()}/mo** = ${housingPct.toFixed(1)}% of gross income (max ${R.MAX_HOUSING_PCT_OF_GROSS_INCOME}%) → ${housingOk ? "✓ Pass" : "✗ Too high — do not recommend buying"}`
     );
+    if (!housingOk && housingCap !== null && totalHousing > housingCap) {
+      lines.push(
+        `  → You are **$${Math.round(totalHousing - housingCap).toLocaleString()}/mo** over the ${R.MAX_HOUSING_PCT_OF_GROSS_INCOME}% cap.`
+      );
+    }
   }
 
   lines.push("");
@@ -429,10 +608,13 @@ function mortgageContextSummary(d: MortgageConversationState["data"]): string[] 
 
 function nextMortgageQuestion(state: MortgageConversationState): FlowResult {
   const d = state.data;
+  const summary = mortgageContextSummary(d);
   const ack =
-    mortgageContextSummary(d).length >= 2
-      ? intakeAcknowledgment(mortgageContextSummary(d))
-      : "";
+    summary.length >= 3
+      ? intakeAcknowledgment(summary)
+      : summary.length === 2
+        ? `Got it — ${summary.join(", ")}.\n\n`
+        : "";
 
   if (d.isRefinance === null) {
     if (d.homePrice !== null) {
@@ -511,11 +693,10 @@ function nextMortgageQuestion(state: MortgageConversationState): FlowResult {
   }
 
   if (d.cashAvailable === null) {
-    const need =
-      d.downPayment! + (d.closingCosts ?? estimateClosingCosts(d.homePrice!)) + d.emergencyFund!;
+    const need = requiredCashTotal(d);
     return contextualPrompt(
       state,
-      `Do you have enough **cash on hand** for down payment + closing + emergency fund combined? (Need about $${need.toLocaleString()} total — not borrowed.)`,
+      `Do you have enough **cash on hand** for down payment + closing + emergency fund combined? (Need about **$${need!.toLocaleString()}** total — not borrowed.)\n\nReply **yes** if you have that much, **no** if not, or type the dollar amount you have.`,
       "cash_available"
     );
   }
@@ -539,7 +720,7 @@ function nextMortgageQuestion(state: MortgageConversationState): FlowResult {
   if (d.monthlyPropertyTax === null) {
     return contextualPrompt(
       state,
-      "What are **monthly property taxes**? (Or say “estimate” and I’ll use a rough default.)",
+      "What are your **monthly property taxes** for this home? (Required — or say “estimate” for a rough default.)",
       "property_tax"
     );
   }
@@ -547,7 +728,7 @@ function nextMortgageQuestion(state: MortgageConversationState): FlowResult {
   if (d.monthlyInsurance === null) {
     return contextualPrompt(
       state,
-      "What is **monthly homeowners insurance**? (Or say “estimate”.)",
+      "What is your **monthly homeowners insurance**? (Required — or say “estimate”.)",
       "insurance"
     );
   }
@@ -555,12 +736,57 @@ function nextMortgageQuestion(state: MortgageConversationState): FlowResult {
   if (d.monthlyHoaMaintenance === null) {
     return contextualPrompt(
       state,
-      `Monthly **HOA + maintenance/repairs**? (Or say “estimate” — we use ~${R.HIDDEN_COST_PCT_DEFAULT}% of mortgage+tax+insurance for hidden costs.)`,
+      "Monthly **HOA or maintenance** (optional — enter **0** or **none** if you don’t have any):",
       "hoa_maintenance"
     );
   }
 
   return buildPurchaseAssessment(state);
+}
+
+function applyInferredMortgageAnswer(
+  state: MortgageConversationState,
+  userText: string
+): void {
+  state.data = mergeKnown(state.data, extractMortgageSignals(userText));
+
+  const need = requiredCashTotal(state.data);
+  const yn = parseYesNo(userText);
+  if (yn === true && need !== null) {
+    state.data.cashAvailable = need;
+    return;
+  }
+  if (yn === false && state.data.cashAvailable === null) {
+    state.data.cashAvailable = 0;
+    return;
+  }
+
+  const rate = parseAprPercent(userText);
+  if (rate !== null) {
+    state.data.interestRatePct = rate;
+    return;
+  }
+
+  if (state.stage === "gross_income" || state.data.grossMonthlyIncome === null) {
+    const inc = parseGrossMonthlyIncome(userText) ?? parseIncomeShortReply(userText);
+    if (inc !== null) {
+      state.data.grossMonthlyIncome = inc;
+      return;
+    }
+  }
+
+  if (/\b15\b/.test(userText) && !/\b30\b/.test(userText)) {
+    state.data.loanTermYears = 15;
+    return;
+  }
+  if (/\b30\b/.test(userText)) {
+    state.data.loanTermYears = 30;
+    return;
+  }
+
+  if (state.stage) {
+    applyStageAnswer(state, userText);
+  }
 }
 
 function applyStageAnswer(state: MortgageConversationState, userText: string): void {
@@ -579,6 +805,10 @@ function applyStageAnswer(state: MortgageConversationState, userText: string): v
     if (state.stage === "hoa_maintenance") {
       state.data.monthlyHoaMaintenance = 0;
     }
+  }
+
+  if (state.stage === "hoa_maintenance" && /^(none|no|n\/a|0|zero|skip)$/i.test(t)) {
+    state.data.monthlyHoaMaintenance = 0;
   }
 
   switch (state.stage) {
@@ -601,9 +831,18 @@ function applyStageAnswer(state: MortgageConversationState, userText: string): v
     case "emergency_fund":
       if (amt !== null) state.data.emergencyFund = amt;
       break;
-    case "cash_available":
-      if (amt !== null) state.data.cashAvailable = amt;
+    case "cash_available": {
+      const need = requiredCashTotal(state.data);
+      const yn = parseYesNo(userText);
+      if (yn === true && need !== null) {
+        state.data.cashAvailable = need;
+      } else if (yn === false) {
+        state.data.cashAvailable = 0;
+      } else if (amt !== null) {
+        state.data.cashAvailable = amt;
+      }
       break;
+    }
     case "loan_term":
       if (/\b15\b/.test(t)) state.data.loanTermYears = 15;
       else if (/\b30\b/.test(t)) state.data.loanTermYears = 30;
@@ -619,7 +858,8 @@ function applyStageAnswer(state: MortgageConversationState, userText: string): v
       if (amt !== null) state.data.monthlyInsurance = amt;
       break;
     case "hoa_maintenance":
-      if (amt !== null && amt >= 0) state.data.monthlyHoaMaintenance = amt;
+      if (/^(none|no|n\/a|skip)$/i.test(t)) state.data.monthlyHoaMaintenance = 0;
+      else if (amt !== null && amt >= 0) state.data.monthlyHoaMaintenance = amt;
       break;
     case "current_rate":
       if (pct !== null) state.data.currentRatePct = pct;
@@ -643,17 +883,30 @@ export function handleMortgageFlow(
     .join("\n");
 
   const state = initMortgageState(incomingState);
-  state.data = mergeKnown(state.data, extractMortgageSignals(allUserText));
-
   const last = thread[thread.length - 1];
+
+  if (incomingState?.intakeComplete) {
+    return null;
+  }
+
+  let correctionNote: string | null = null;
+  if (last?.role === "user" && looksLikeDataCorrection(last.content)) {
+    const { changed, note } = applyMortgageCorrections(state.data, last.content);
+    correctionNote = note ?? "Recalculating with your updated numbers.";
+    state.addressedConcerns = [];
+    state.lastConcernShown = undefined;
+    state.stage = null;
+  } else {
+    syncMortgageSignalsFromThread(state, thread);
+  }
 
   if (options?.forceTopic && state.data.isRefinance === null && state.data.homePrice !== null) {
     state.data.isRefinance = false;
   }
 
-  if (last?.role === "user") {
+  if (last?.role === "user" && !looksLikeDataCorrection(last.content)) {
     const bulk = /,/.test(last.content) && mortgageContextSummary(state.data).length >= 2;
-    if (!bulk) {
+    if (!bulk && !parseYesNo(last.content)) {
       const direct = tryDirectSectionAnswer(last.content, "mortgage");
       if (direct) {
         return {
@@ -663,11 +916,25 @@ export function handleMortgageFlow(
       }
     }
 
-    state.data = mergeKnown(state.data, extractMortgageSignals(last.content));
-    if (state.stage) {
-      applyStageAnswer(state, last.content);
-      state.data = mergeKnown(state.data, extractMortgageSignals(last.content));
+    applyInferredMortgageAnswer(state, last.content);
+    if (!looksLikeDataCorrection(last.content)) {
+      syncMortgageSignalsFromThread(state, thread);
     }
+  }
+
+  if (correctionNote && last?.role === "user") {
+    if (state.data.isRefinance) {
+      const refi = buildRefiAssessment(state);
+      return {
+        answer: `${correctionNote}\n\n${refi.answer}`,
+        state: refi.state,
+      };
+    }
+    const assessment = buildPurchaseAssessment(state);
+    return {
+      answer: `${correctionNote}\n\n${assessment.answer}`,
+      state: assessment.state,
+    };
   }
 
   if (!options?.forceTopic) {
@@ -676,5 +943,42 @@ export function handleMortgageFlow(
       return null;
   }
 
-  return nextMortgageQuestion({ ...state, stage: null });
+  const mortgageHelpers = {
+    estimatePi: monthlyPrincipalAndInterest,
+    estimateTax: estimateMonthlyTax,
+    estimateIns: estimateMonthlyInsurance,
+    hiddenPct: R.HIDDEN_COST_PCT_DEFAULT,
+    requiredCash: requiredCashTotal,
+  };
+
+  let conversational = autoResolveMortgageConcerns(state, {
+    requiredCash: requiredCashTotal,
+  });
+  if (last?.role === "user") {
+    conversational = acknowledgeLastConcern(conversational, last.content);
+    const picked = pickMortgageConcern(conversational, last.content, mortgageHelpers);
+    if (picked) {
+      return {
+        answer: picked.concern.message,
+        state: picked.state,
+      };
+    }
+  }
+
+  const result = nextMortgageQuestion(conversational);
+  if (
+    last?.role === "user" &&
+    parseYesNo(last.content) === true &&
+    state.data.cashAvailable !== null &&
+    result.state.stage === "interest_rate"
+  ) {
+    return {
+      answer:
+        `Good — you have enough cash for down payment, closing, and emergency fund ($${state.data.cashAvailable.toLocaleString()} needed).\n\n` +
+        result.answer,
+      state: result.state,
+    };
+  }
+
+  return result;
 }

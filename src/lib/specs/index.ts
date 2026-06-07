@@ -1,13 +1,26 @@
-import { carSpec, investmentSpec, mortgageSpec } from "./bundle";
+import { carSpec, investmentSpec, mortgageSpec, platformSpec } from "./bundle";
 
 export {
   carSpec,
   mortgageSpec,
   investmentSpec,
+  platformSpec,
+  aiBehaviorSpec,
+  costlyMistakesSpec,
   HUB_SECTIONS,
   INTAKE_POLICY_UNIVERSAL,
 } from "./bundle";
-export type { CarSpec, MortgageSpec, InvestmentSpec, SectionId } from "./types";
+export type {
+  CarSpec,
+  MortgageSpec,
+  InvestmentSpec,
+  SectionId,
+  AiBehaviorSpec,
+  CostlyMistakesSpec,
+  CostlyMistakeTopic,
+  CostlyMistakeQuestion,
+  CostlyMistakeQuestionOption,
+} from "./types";
 export {
   formatSpecTemplate,
   carTemplateVars,

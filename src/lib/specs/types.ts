@@ -78,3 +78,69 @@ export type InvestmentSpec = {
 };
 
 export type SectionId = CarSpec["id"] | MortgageSpec["id"] | InvestmentSpec["id"];
+
+export type CostlyMistakeQuestionOption = { id: string; label: string };
+
+export type CostlyMistakeQuestion = {
+  id: string;
+  prompt: string;
+  type: "yesno" | "choice";
+  options?: CostlyMistakeQuestionOption[];
+};
+
+export type CostlyMistakeTopic = {
+  id: string;
+  name: string;
+  emoji: string;
+  category: string;
+  status: "available" | "future";
+  tagline: string;
+  what_is_it: string;
+  why_people_buy: string[];
+  costs: string[];
+  who_benefits: string[];
+  alternatives: string[];
+  questions_to_ask: string[];
+  questions: CostlyMistakeQuestion[];
+};
+
+export type CostlyMistakesSpec = {
+  id: "costly-mistakes";
+  meta: { label: string; blurb: string; hub_intro: string };
+  intro: string;
+  principle: string;
+  disclaimer: string;
+  ai: {
+    should: string[];
+    should_not: string[];
+    tone: string[];
+    example_style: { avoid: string; use: string };
+  };
+  topics: CostlyMistakeTopic[];
+};
+
+export type PlatformSpec = {
+  conversation: {
+    principles: string[];
+    tone: string[];
+    when_confused: string[];
+  };
+};
+
+export type AiBehaviorSpec = {
+  core_principle: string;
+  role: { should: string[]; should_not: string[] };
+  tone: { qualities: string[]; avoid: string[] };
+  philosophy: string[];
+  output_style: string[];
+  assessment_explanation: { focus_on: string[]; approach: string[] };
+  follow_up: { use_guided_prompts: boolean; examples: string[]; behavior: string[] };
+  off_topic: { behavior: string[]; redirect_template: string };
+  investment: { note: string; philosophy: string[] };
+  car_loan: { philosophy: string[] };
+  mortgage: { philosophy: string[] };
+  can_i_buy_this: { status: string; philosophy: string[] };
+  restrictions: { never: string[] };
+  disclaimer: string;
+  product_goal: string;
+};

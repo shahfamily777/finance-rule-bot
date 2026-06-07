@@ -16,6 +16,8 @@ intake:
     - Parse ALL fields the user gives; never re-ask filled fields.
     - Ask only the next missing field, or run the assessment when enough is known.
     - Acknowledge bundled numbers when the user provides several at once.
+    - If something looks off (down > price, housing cost vs income), ask before moving on.
+    - Accept yes/no on cash readiness; don't loop on the same question.
   purchase_field_order:
     - home_price
     - gross_monthly_income
@@ -47,17 +49,17 @@ fields:
   closing_costs:
     question: Estimated closing costs? (If unsure, many buyers use ~{estimated_closing_cost_pct}% of price ≈ ${estimated_closing}.)
   cash_available:
-    question: Do you have enough cash on hand for down + closing + emergency fund combined? (Need about ${cash_needed_total} — not borrowed.)
+    question: Do you have enough cash on hand for down + closing + emergency fund combined? (Need about ${cash_needed_total} — not borrowed.) Reply yes, no, or a dollar amount.
   interest_rate_pct:
     question: What mortgage interest rate do you expect? (e.g. 6.25%)
   loan_term_years:
     question: Loan term — 15 or 30 years? (Only these two fit our rules.)
   monthly_property_tax:
-    question: What are monthly property taxes? (Or say “estimate”.)
+    question: What are monthly property taxes for this home? (Required.)
   monthly_insurance:
-    question: What is monthly homeowners insurance? (Or say “estimate”.)
+    question: What is monthly homeowners insurance? (Required.)
   monthly_hoa_maintenance:
-    question: Monthly HOA + maintenance/repairs? (Or say “estimate” — we use ~{hidden_cost_pct_default}% of mortgage+tax+insurance for hidden costs.)
+    question: Monthly HOA or maintenance? (Optional — enter 0 or none if not applicable.)
   current_rate_pct:
     question: What is your current mortgage rate? (e.g. 6.5%)
   new_rate_pct:
@@ -88,7 +90,8 @@ rules_summary: |
   • Refinance when rate drops ≥{refinance_rate_drop_min_pct}%
   • Before buying: {min_down_payment_pct}% down + closing costs + emergency fund in cash (else keep renting)
   • Extra payoff encouraged when rate >{high_rate_extra_payoff_pct}%
-  • Total housing ≤ {max_housing_pct_of_gross}% of gross monthly income (PITI + tax + insurance + ~{hidden_cost_pct_low}–{hidden_cost_pct_high}% hidden)
+  • Total housing ≤ {max_housing_pct_of_gross}% of gross monthly income (PITI + tax + insurance + HOA if any)
+  • Assessment shows max affordable home price at the {max_housing_pct_of_gross}% cap
 
 direct_answers:
   loan_terms_invalid: We only use 15- or 30-year mortgages here — not 40-year or other terms.

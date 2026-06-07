@@ -161,9 +161,20 @@ export function isUserAskingQuestion(text: string): boolean {
 }
 
 /** User is replying with data to a guided flow — not asking a new question. */
-export function isIntakeDataMessage(text: string, inActiveFlow: boolean): boolean {
+export function isIntakeDataMessage(
+  text: string,
+  inActiveFlow: boolean,
+  options?: { intakeComplete?: boolean }
+): boolean {
   const t = text.trim();
   if (!t) return false;
+
+  if (options?.intakeComplete) {
+    if (/(?:here\s+are|my\s+numbers|update\s+my|change\s+my|new\s+numbers|rerun)/i.test(t))
+      return true;
+    if (/\bvehicle\b/i.test(t) && /\$?\s*[\d,]+/.test(t) && t.length > 40) return true;
+    return false;
+  }
   if (isCarLoanRuleQuestion(t) && !isCarLoanContextMessage(t)) return false;
   if (isCarLoanContextMessage(t)) return true;
   if (isMortgageContextMessage(t) && /\$?\s*[\d,]+/.test(t) && !isUserAskingQuestion(t))
@@ -249,6 +260,20 @@ function carLoanTermTooLongAnswer(months: number): DirectAnswer {
 
 function answerCarLoanDirect(text: string): DirectAnswer | null {
   const t = text.trim();
+
+  if (/\bwhy\b/i.test(t) && /\b(48|four year|beyond|longer than|more than)\b/i.test(t)) {
+    return null;
+  }
+  if (
+    /\b(don't|do not|can't|cannot|not enough).{0,50}(down|afford)/i.test(t) &&
+    !/too\s+long/i.test(t)
+  ) {
+    return null;
+  }
+  if (/\bwhat should i do\b/i.test(t) && /down|48|payment|afford|loan/i.test(t)) {
+    return null;
+  }
+
   const months = parseTermMonths(t);
 
   if (/too\s+long/i.test(t) && (months !== null && months > 48 || /\b(60|72|84|96)\b/.test(t))) {
@@ -282,7 +307,10 @@ function answerCarLoanDirect(text: string): DirectAnswer | null {
   }
 
   if (months === 48 || /\b48\s*[-\s]?month|\b4\s*[-\s]?year\b/i.test(t)) {
-    if (isQuestion(t) || /ok|fine|maximum|max/i.test(t)) {
+    if (
+      (isQuestion(t) || /ok|fine|maximum|max/i.test(t)) &&
+      !/\bwhy\b|\bexplain\b|not enough|can't|cannot/i.test(t)
+    ) {
       return {
         answer:
           "**48 months (4 years)** is our **maximum** allowed car loan term — that is acceptable. Shorter is fine too; do not go beyond 48.",
