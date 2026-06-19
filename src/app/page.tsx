@@ -121,6 +121,30 @@ const HUB_GROUPS: HubGroupConfig[] = [
 
 const ROADMAP_ITEMS = ["Debt", "Can I Buy This?", "Financial Literacy"];
 
+/**
+ * Calm, desaturated card palette — deep professional tones with white text.
+ * Kept local to the hub so the in-section theming (section-theme.ts) is untouched.
+ */
+const CARD_BODY: Record<SectionId, string> = {
+  investment: "bg-gradient-to-br from-indigo-800 to-indigo-950",
+  mortgage: "bg-gradient-to-br from-teal-700 to-teal-900",
+  "car-loan": "bg-gradient-to-br from-sky-700 to-blue-900",
+};
+
+const COSTLY_MISTAKES_BODY = "bg-gradient-to-br from-amber-700 to-amber-900";
+
+/** Shared card chrome so every primary card matches in width, height, and padding. */
+const CARD_BASE =
+  "hub-card group relative flex min-h-[12.5rem] flex-col overflow-hidden rounded-2xl border border-slate-200/70 p-0 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500";
+
+const CARD_BODY_INNER = "flex flex-1 flex-col px-6 py-6 text-white";
+
+const CARD_ICON =
+  "mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-white";
+
+const CARD_FOOTER =
+  "flex items-center justify-between border-t border-slate-100 bg-white px-6 py-3.5 text-sm font-semibold text-slate-700 transition-colors group-hover:text-slate-900";
+
 function IconCar({ className }: { className?: string }) {
   return (
     <svg
@@ -268,7 +292,7 @@ function HubGroup({
   return (
     <section>
       <div className="mb-4 px-1">
-        <h2 className="text-base font-bold tracking-tight text-slate-900">
+        <h2 className="text-lg font-bold tracking-tight text-slate-900">
           {title}
         </h2>
         <p className="mt-1 text-sm leading-relaxed text-slate-500">
@@ -464,24 +488,16 @@ export default function Home() {
         key={id}
         type="button"
         onClick={() => openSection(id)}
-        className={`hub-card group relative flex min-h-[9.5rem] flex-col overflow-hidden rounded-2xl border ${t.hub.border} p-0 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 active:translate-y-0 ${t.hub.shadow} ${t.hub.hoverShadow} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500`}
+        className={CARD_BASE}
       >
-        <div className={`${t.hub.gradient} flex-1 px-6 py-7 text-white`}>
-          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" aria-hidden />
-            Available
-          </span>
-          <div
-            className={`hub-icon mb-3 flex h-12 w-12 items-center justify-center rounded-xl ${t.hub.iconBg} ${t.hub.iconColor}`}
-          >
-            {sectionIcon(id, "h-7 w-7")}
-          </div>
-          <span className="text-lg font-bold">
+        <div className={`${CARD_BODY[id]} ${CARD_BODY_INNER}`}>
+          <div className={CARD_ICON}>{sectionIcon(id, "h-6 w-6")}</div>
+          <h3 className="text-lg font-semibold tracking-tight">
             {t.emoji} {title}
-          </span>
-          <span className="mt-1 block text-sm text-white/85">{blurb}</span>
+          </h3>
+          <p className="mt-1.5 text-sm leading-relaxed text-white/80">{blurb}</p>
         </div>
-        <div className="flex items-center justify-between bg-white/90 px-6 py-4 text-sm font-semibold text-slate-700 backdrop-blur-sm transition-colors group-hover:text-slate-900">
+        <div className={CARD_FOOTER}>
           <span>Get Started</span>
           <span
             className="transition-transform duration-300 group-hover:translate-x-1"
@@ -512,20 +528,14 @@ export default function Home() {
           setStartHereComingSoon(null);
           setView(targetView);
         }}
-        className="hub-card group relative flex min-h-[9.5rem] flex-col overflow-hidden rounded-2xl border border-teal-200/60 p-0 text-left shadow-sm shadow-teal-500/10 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-teal-500/20 active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+        className={CARD_BASE}
       >
-        <div className="flex-1 bg-gradient-to-br from-teal-500 via-emerald-500 to-green-500 px-6 py-7 text-white">
-          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-200" aria-hidden />
-            Available
-          </span>
-          <div className="hub-icon mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 text-2xl">
-            {emoji}
-          </div>
-          <span className="text-lg font-bold">{title}</span>
-          <span className="mt-1 block text-sm text-white/85">{blurb}</span>
+        <div className={`${COSTLY_MISTAKES_BODY} ${CARD_BODY_INNER}`}>
+          <div className={`${CARD_ICON} text-2xl`}>{emoji}</div>
+          <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
+          <p className="mt-1.5 text-sm leading-relaxed text-white/80">{blurb}</p>
         </div>
-        <div className="flex items-center justify-between bg-white/90 px-6 py-4 text-sm font-semibold text-slate-700 backdrop-blur-sm transition-colors group-hover:text-slate-900">
+        <div className={CARD_FOOTER}>
           <span>Get Started</span>
           <span
             className="transition-transform duration-300 group-hover:translate-x-1"
@@ -689,17 +699,17 @@ export default function Home() {
       />
       <main className="relative mx-auto flex min-h-screen max-w-2xl flex-col px-4 pb-10 pt-8 sm:px-6 sm:pt-12">
         <header className="mb-10 text-center">
-          <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-indigo-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+          <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-600">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
             Personal finance guidance
           </p>
-          <h1 className="bg-gradient-to-r from-indigo-700 via-violet-700 to-fuchsia-600 bg-clip-text text-3xl font-bold tracking-tight text-transparent sm:text-4xl">
+          <h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
             Finance Rules
           </h1>
-          <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-slate-600">
+          <p className="mx-auto mt-3 max-w-md text-base leading-relaxed text-slate-600">
             Make calmer and clearer money decisions.
           </p>
-          <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-500">
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-500">
             Spend intentionally.
             <br />
             Avoid costly mistakes.
@@ -709,7 +719,7 @@ export default function Home() {
         </header>
 
         {view === "hub" ? (
-          <div className="space-y-12">
+          <div className="space-y-10">
             <button
               type="button"
               onClick={() => {
@@ -720,16 +730,16 @@ export default function Home() {
                 setStartHereComingSoon(null);
                 setView("start-here");
               }}
-              className="hub-card group relative flex w-full items-center gap-4 overflow-hidden rounded-2xl border border-indigo-200/60 bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 px-5 py-5 text-left text-white shadow-lg shadow-indigo-500/25 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+              className="hub-card group relative flex w-full items-center gap-4 overflow-hidden rounded-2xl border border-indigo-900/20 bg-gradient-to-br from-indigo-700 to-violet-900 px-6 py-6 text-left text-white shadow-md shadow-indigo-900/20 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
             >
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/25 text-2xl backdrop-blur-sm">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 text-2xl">
                 🧭
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-lg font-bold">
+                <span className="block text-lg font-semibold tracking-tight">
                   Not sure where to begin?
                 </span>
-                <span className="mt-0.5 block text-sm text-white/85">
+                <span className="mt-1 block text-sm leading-relaxed text-white/80">
                   Answer a few quick questions and get pointed to the most
                   relevant financial decision tool.
                 </span>
@@ -757,7 +767,7 @@ export default function Home() {
             ))}
 
             <section className="px-1">
-              <h2 className="text-base font-bold tracking-tight text-slate-900">
+              <h2 className="text-lg font-bold tracking-tight text-slate-900">
                 Roadmap
               </h2>
               <p className="mt-1 text-sm text-slate-500">
@@ -772,10 +782,10 @@ export default function Home() {
             </section>
 
             <section className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 backdrop-blur-sm">
-              <h2 className="text-base font-bold tracking-tight text-slate-900">
+              <h2 className="text-lg font-bold tracking-tight text-slate-900">
                 Why Finance Rules?
               </h2>
-              <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-600">
+              <ul className="mt-3 space-y-2.5 text-sm leading-relaxed text-slate-600">
                 {[
                   "Structured assessments instead of generic chatbot answers",
                   "Transparent rules and reasoning",
@@ -783,7 +793,7 @@ export default function Home() {
                   "Designed to help people make better decisions",
                 ].map((point) => (
                   <li key={point} className="flex gap-2.5">
-                    <span className="mt-0.5 shrink-0 font-bold text-emerald-500" aria-hidden>
+                    <span className="mt-0.5 shrink-0 font-bold text-teal-600" aria-hidden>
                       ✓
                     </span>
                     <span>{point}</span>
