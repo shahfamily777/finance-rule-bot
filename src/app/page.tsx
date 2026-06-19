@@ -4,6 +4,8 @@ import { AssessmentView } from "@/components/AssessmentView";
 import { CostlyMistakesModule } from "@/components/CostlyMistakesModule";
 import { GuidedChat } from "@/components/GuidedChat";
 import { SectionGuidedIntake } from "@/components/SectionGuidedIntake";
+import { StartHere, type StartHereDestination } from "@/components/StartHere";
+import { WhyTheseRules } from "@/components/WhyTheseRules";
 import {
   assessmentFromChatState,
   isIntakeComplete,
@@ -50,7 +52,7 @@ const SECTIONS: {
   },
   {
     id: "investment",
-    label: "Invest",
+    label: "Money Priority Plan",
     blurb: "Where your next dollar should go",
   },
 ];
@@ -249,6 +251,10 @@ function ComingSoonCard({ emoji, title, blurb }: ComingSoonCard) {
       aria-disabled
     >
       <div className="bg-gradient-to-br from-slate-200 to-slate-300 px-5 py-6 text-slate-600">
+        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden />
+          Coming soon
+        </span>
         <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/60 text-2xl">
           {emoji}
         </div>
@@ -260,8 +266,11 @@ function ComingSoonCard({ emoji, title, blurb }: ComingSoonCard) {
   );
 }
 
+type View = "hub" | SectionId | "costly-mistakes" | "start-here" | "why-rules";
+
 export default function Home() {
-  const [view, setView] = useState<"hub" | SectionId | "costly-mistakes">("hub");
+  const [view, setView] = useState<View>("hub");
+  const [startHereComingSoon, setStartHereComingSoon] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [messagesBySection, setMessagesBySection] =
     useState<Record<SectionId, ChatMessage[]>>(EMPTY_MESSAGES);
@@ -295,7 +304,12 @@ export default function Home() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const section: SectionId | null =
-    view === "hub" || view === "costly-mistakes" ? null : view;
+    view === "hub" ||
+    view === "costly-mistakes" ||
+    view === "start-here" ||
+    view === "why-rules"
+      ? null
+      : view;
   const messages = section ? messagesBySection[section] : [];
   const phase = section ? phaseBySection[section] : "guided";
   const assessment: StructuredAssessment | null = section
@@ -414,6 +428,19 @@ export default function Home() {
     }));
   }
 
+  function handleStartHerePick(destination: StartHereDestination) {
+    if (destination.kind === "section") {
+      setStartHereComingSoon(null);
+      openSection(destination.id);
+      return;
+    }
+    trackClick("start-here", {
+      event: "start_here_coming_soon",
+      label: `coming-soon:${destination.title}`,
+    });
+    setStartHereComingSoon(destination.title);
+  }
+
   function renderSectionCard(id: SectionId) {
     const t = SECTION_THEMES[id];
     const meta = SECTIONS.find((s) => s.id === id)!;
@@ -425,6 +452,10 @@ export default function Home() {
         className={`hub-card group relative flex flex-col overflow-hidden rounded-2xl border ${t.hub.border} p-0 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 ${t.hub.shadow} ${t.hub.hoverShadow} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500`}
       >
         <div className={`${t.hub.gradient} px-5 py-6 text-white`}>
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" aria-hidden />
+            Available
+          </span>
           <div
             className={`hub-icon mb-3 flex h-12 w-12 items-center justify-center rounded-xl ${t.hub.iconBg} ${t.hub.iconColor}`}
           >
@@ -610,6 +641,32 @@ export default function Home() {
 
         {view === "hub" ? (
           <div className="space-y-9">
+            <button
+              type="button"
+              onClick={() => {
+                trackClick("start-here", {
+                  event: "section_open",
+                  label: "section:start-here",
+                });
+                setStartHereComingSoon(null);
+                setView("start-here");
+              }}
+              className="hub-card group relative flex w-full items-center gap-4 overflow-hidden rounded-2xl border border-indigo-200/60 bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 px-5 py-5 text-left text-white shadow-lg shadow-indigo-500/25 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/25 text-2xl backdrop-blur-sm">
+                🧭
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-lg font-bold">Start here</span>
+                <span className="mt-0.5 block text-sm text-white/85">
+                  Answer one question and we&apos;ll guide you to the right section.
+                </span>
+              </span>
+              <span className="ml-auto text-xl text-white/90" aria-hidden>
+                →
+              </span>
+            </button>
+
             <HubGroup title="Build Wealth">
               {renderSectionCard("investment")}
               <ComingSoonCard {...COMING_SOON.debt} />
@@ -752,8 +809,25 @@ export default function Home() {
             </div>
           </>
         )}
-        <footer className="mt-12 text-center text-xs text-slate-500">
-          Rule-based educational guidance. Not financial advice.
+        <footer className="mt-12 space-y-2 text-center text-xs text-slate-500">
+          {view !== "why-rules" ? (
+            <p>
+              <button
+                type="button"
+                onClick={() => {
+                  trackClick("why-rules", {
+                    event: "section_open",
+                    label: "section:why-rules",
+                  });
+                  setView("why-rules");
+                }}
+                className="font-semibold text-indigo-600 underline-offset-2 hover:text-indigo-700 hover:underline"
+              >
+                Why these rules?
+              </button>
+            </p>
+          ) : null}
+          <p>Rule-based educational guidance. Not financial advice.</p>
         </footer>
       </main>
     </div>
