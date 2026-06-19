@@ -53,3 +53,7 @@ finance_rules_bot_template/
 next-env.d.ts
 
 .vercel
+
+# stray command output files
+*_out.txt
+data/
