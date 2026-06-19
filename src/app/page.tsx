@@ -11,6 +11,7 @@ import {
 import type { StructuredAssessment } from "@/lib/assessment-types";
 import type { GuidedPrompt } from "@/lib/guided-prompts";
 import { getSectionTheme, SECTION_THEMES } from "@/lib/section-theme";
+import { trackClick } from "@/lib/track-click";
 import type {
   CarLoanFormValues,
   InvestmentFormValues,
@@ -398,6 +399,7 @@ export default function Home() {
   }
 
   function openSection(id: SectionId) {
+    trackClick(id, { event: "section_open", label: `section:${id}` });
     setView(id);
     setFormSanityError((prev) => ({ ...prev, [id]: null }));
     const a =
@@ -622,7 +624,13 @@ export default function Home() {
             <HubGroup title="Learn">
               <button
                 type="button"
-                onClick={() => setView("costly-mistakes")}
+                onClick={() => {
+                  trackClick("costly-mistakes", {
+                    event: "section_open",
+                    label: "section:costly-mistakes",
+                  });
+                  setView("costly-mistakes");
+                }}
                 className="hub-card group relative flex flex-col overflow-hidden rounded-2xl border border-rose-200/60 p-0 text-left shadow-sm shadow-rose-500/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-rose-500/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
               >
                 <div className="bg-gradient-to-br from-rose-400 via-rose-500 to-orange-600 px-5 py-6 text-white">

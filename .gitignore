@@ -37,6 +37,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# local analytics data (collected click events; do not commit)
+/data/
+
 # vercel
 .vercel
 
