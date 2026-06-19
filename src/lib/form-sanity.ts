@@ -6,9 +6,19 @@
 import { computeMonthlyLoanPayment, monthlyPrincipalAndInterest } from "@/lib/loan-math";
 import type { CarLoanFormValues, InvestmentFormValues, MortgageFormValues } from "@/lib/form-types";
 
+/**
+ * `severity` distinguishes two kinds of sanity problems:
+ * - "hard": truly impossible / typo'd inputs (price below the realistic floor,
+ *   down payment > price, negative/zero values). These ALWAYS block and can't be
+ *   acknowledged away.
+ * - "soft": plausibility ratios ("seems high", extreme ratio, 56% of income…).
+ *   These warn once, but the user can acknowledge and proceed.
+ */
+export type FormSanitySeverity = "hard" | "soft";
+
 export type FormSanityResult =
   | { ok: true }
-  | { ok: false; message: string };
+  | { ok: false; message: string; severity: FormSanitySeverity };
 
 export class FormSanityError extends Error {
   constructor(message: string) {
@@ -17,8 +27,25 @@ export class FormSanityError extends Error {
   }
 }
 
-function fail(message: string): FormSanityResult {
-  return { ok: false, message };
+function fail(message: string, severity: FormSanitySeverity = "soft"): FormSanityResult {
+  return { ok: false, message, severity };
+}
+
+/**
+ * Below this, a "home purchase price" is almost certainly a typo / missing
+ * digits rather than a real property. We reject (not just warn) these.
+ */
+export const MIN_REALISTIC_HOME_PRICE = 25_000;
+
+export function validateMortgageHomePriceField(price: number): FormSanityResult {
+  if (price <= 0) return fail("Enter a valid home purchase price.", "hard");
+  if (price < MIN_REALISTIC_HOME_PRICE) {
+    return fail(
+      `A home price of $${price.toLocaleString()} is too low to be a real purchase — looks like some digits are missing. Enter the full price (e.g. **$300,000** or **300k**).`,
+      "hard"
+    );
+  }
+  return { ok: true };
 }
 
 /** First failed check wins — keeps messages focused. */
@@ -109,18 +136,53 @@ export function validateCarLoanForm(form: CarLoanFormValues): FormSanityResult {
   );
 }
 
-export function validateMortgageForm(form: MortgageFormValues): FormSanityResult {
+/**
+ * HARD checks only — truly impossible / typo'd inputs. These always block and
+ * cannot be acknowledged away (used server-side even when the user has
+ * acknowledged the soft plausibility warnings).
+ */
+export function validateMortgageFormHard(form: MortgageFormValues): FormSanityResult {
   if (form.scenario === "refinance") {
     return first(
       form.currentRatePct <= 0 || form.currentRatePct > 25
-        ? fail("Enter a realistic current mortgage rate (e.g. 6.5%).")
+        ? fail("Enter a realistic current mortgage rate (e.g. 6.5%).", "hard")
         : { ok: true },
       form.newRatePct <= 0 || form.newRatePct > 25
-        ? fail("Enter a realistic new rate (e.g. 5.5%).")
-        : { ok: true },
+        ? fail("Enter a realistic new rate (e.g. 5.5%).", "hard")
+        : { ok: true }
+    );
+  }
+
+  const {
+    homePrice: price,
+    grossMonthlyIncome: income,
+    downPayment: down,
+    interestRatePct: rate,
+  } = form;
+
+  return first(
+    validateMortgageHomePriceField(price),
+    income <= 0 ? fail("Enter a valid gross monthly income.", "hard") : { ok: true },
+    down > price
+      ? fail(
+          `Down payment ($${down.toLocaleString()}) can't exceed the home price ($${price.toLocaleString()}).`,
+          "hard"
+        )
+      : { ok: true },
+    rate <= 0 || rate > 25
+      ? fail(`Mortgage rate should be roughly 0.1%–25% — you entered ${rate}%.`, "hard")
+      : { ok: true }
+  );
+}
+
+/** SOFT plausibility checks only — dismissible/acknowledgeable warnings. */
+function validateMortgageFormSoft(form: MortgageFormValues): FormSanityResult {
+  if (form.scenario === "refinance") {
+    return first(
       form.newRatePct >= form.currentRatePct
         ? fail(
-            "For a refinance check, the new rate should be **lower** than your current rate."
+            "For a refinance check, the new rate should be **lower** than your current rate.",
+            "soft"
           )
         : { ok: true }
     );
@@ -143,20 +205,10 @@ export function validateMortgageForm(form: MortgageFormValues): FormSanityResult
   const hoaAmt = hoa ?? 0;
 
   return first(
-    price <= 0 ? fail("Enter a valid home purchase price.") : { ok: true },
-    income <= 0 ? fail("Enter a valid gross monthly income.") : { ok: true },
-    down > price
-      ? fail(
-          `Down payment ($${down.toLocaleString()}) can't exceed the home price ($${price.toLocaleString()}).`
-        )
-      : { ok: true },
     income < 1500
       ? fail(
           `$${income.toLocaleString()}/mo gross income seems too low — monthly gross, not annual?`
         )
-      : { ok: true },
-    rate <= 0 || rate > 25
-      ? fail(`Mortgage rate should be roughly 0.1%–25% — you entered ${rate}%.`)
       : { ok: true },
     ins > price * 0.015
       ? fail(
@@ -226,6 +278,12 @@ export function validateMortgageForm(form: MortgageFormValues): FormSanityResult
   );
 }
 
+export function validateMortgageForm(form: MortgageFormValues): FormSanityResult {
+  const hard = validateMortgageFormHard(form);
+  if (!hard.ok) return hard;
+  return validateMortgageFormSoft(form);
+}
+
 export function validateInvestmentForm(form: InvestmentFormValues): FormSanityResult {
   const amt = form.investAmount;
 
@@ -266,6 +324,15 @@ export function assertCarLoanFormSanity(form: CarLoanFormValues): void {
 
 export function assertMortgageFormSanity(form: MortgageFormValues): void {
   const r = validateMortgageForm(form);
+  if (!r.ok) throw new FormSanityError(r.message);
+}
+
+/**
+ * Hard-only assertion: used when the user has acknowledged the soft plausibility
+ * warnings. Truly impossible/typo'd inputs still throw and block the assessment.
+ */
+export function assertMortgageFormHardSanity(form: MortgageFormValues): void {
+  const r = validateMortgageFormHard(form);
   if (!r.ok) throw new FormSanityError(r.message);
 }
 

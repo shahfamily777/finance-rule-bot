@@ -47,30 +47,15 @@ import { explainCostlyMistake } from "@/lib/costly-mistakes/explainer";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function getApiKey(): string | undefined {
-  for (const name of ["OPENAI_API_KEY", "OPENAI_KEY", "OPEN_API_KEY"]) {
-    const v = process.env[name];
-    if (typeof v === "string" && v.trim().length > 0) return v.trim();
-  }
-  return undefined;
-}
-
 /**
  * GET /api/chat — diagnostic endpoint.
- * Returns whether the key is visible, which env-var names exist,
- * and the runtime environment.  No secret values are leaked.
+ * This app is fully rule-based: answers come from fixed specs and math,
+ * with no external AI model. Reported here so it's explicit.
  */
 export async function GET() {
-  const key = getApiKey();
-  const envNames = ["OPENAI_API_KEY", "OPENAI_KEY", "OPEN_API_KEY"];
-  const found = envNames.filter(
-    (n) => typeof process.env[n] === "string" && process.env[n]!.trim().length > 0
-  );
-
   return Response.json({
-    openAiKeyConfigured: Boolean(key),
-    keyLength: key ? key.length : 0,
-    envVarsFound: found,
+    mode: "rule-based",
+    usesExternalAi: false,
     nodeEnv: process.env.NODE_ENV,
     vercel: process.env.VERCEL === "1",
   });
@@ -166,10 +151,9 @@ export async function POST(req: Request) {
       if (!cmMessages?.length) {
         return Response.json({ answer: "Please enter a message." });
       }
-      const answer = await explainCostlyMistake({
+      const answer = explainCostlyMistake({
         topicId: mistakeTopic,
         thread: cmMessages.slice(-MAX_MESSAGES),
-        apiKey: getApiKey(),
       });
       return Response.json({
         answer:
@@ -352,11 +336,10 @@ export async function POST(req: Request) {
       }
 
       if (wantsExplain || (isUserAskingQuestion(lastUserContent) && !direct)) {
-        const explained = await explainRuleQuestion({
+        const explained = explainRuleQuestion({
           topic: activeTopic,
           thread,
           state: incomingState,
-          apiKey: getApiKey(),
         });
         if (explained) {
           return chatResponse(thread, {

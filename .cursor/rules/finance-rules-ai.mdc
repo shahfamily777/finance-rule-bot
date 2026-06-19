@@ -1,5 +1,5 @@
 ---
-description: AI behavior for Finance Rules — rules decide, AI explains. Use when editing chat, explainer, or assessment copy.
+description: Explanation behavior for Finance Rules — rules decide, deterministic copy explains. Use when editing chat, explainer, or assessment copy.
 globs:
   - src/lib/rule-explainer.ts
   - src/lib/ai-behavior.ts
@@ -9,24 +9,30 @@ globs:
 alwaysApply: false
 ---
 
-# Finance Rules — AI behavior
+# Finance Rules — explanation behavior
 
-**Core principle:** Rules decide. AI explains.
+**Core principle:** Rules decide. Explanations are deterministic.
+
+This app does **not** call any external AI model. Every answer comes from fixed
+specs, rule math, and hand-written canned copy.
 
 ## Source of truth
 
 - **Outcomes:** `specs/car.yaml`, `specs/mortgage.yaml`, `specs/investment.yaml` (rule engine)
-- **AI tone & role:** `specs/ai-behavior.yaml` → compiled to `aiBehaviorSpec` → `src/lib/ai-behavior.ts`
-- **Runtime prompts:** `buildRuleExplainerSystemPrompt()` in `src/lib/ai-behavior.ts`
+- **Tone & role copy:** `specs/ai-behavior.yaml` → compiled to `aiBehaviorSpec` → `src/lib/ai-behavior.ts`
+- **Explanations:** deterministic per-topic answers in `src/lib/rule-explainer.ts`
+  (`explainRuleQuestion`) and `src/lib/costly-mistakes/explainer.ts`
+- **Direct rule answers:** `tryDirectSectionAnswer()` in `src/lib/section-qa.ts`
+- **Guided question chips:** `src/lib/guided-prompts.ts`
 
-## AI should
+## Explanations should
 
 - Explain assessments and tradeoffs calmly
 - Answer guided follow-ups within the active section
-- Reference user saved numbers
+- Reference user saved numbers when available
 - Keep responses short (2–4 paragraphs)
 
-## AI must NOT
+## Explanations must NOT
 
 - Override rule-engine results
 - Recommend specific stocks/securities
@@ -40,8 +46,9 @@ Always use `investmentSpec.priority_order` from compiled specs — never invent 
 
 ## When editing
 
-1. Change behavior copy in `specs/ai-behavior.yaml`
+1. Adjust rule values/copy in the relevant `specs/*.yaml`
 2. Run `npm run specs:compile`
-3. Prompt assembly stays in `src/lib/ai-behavior.ts`
+3. Add or refine deterministic answers in `rule-explainer.ts` / `section-qa.ts`;
+   add new follow-up chips in `guided-prompts.ts`
 
 Footer disclaimer: **Rule-based educational guidance. Not financial advice.**

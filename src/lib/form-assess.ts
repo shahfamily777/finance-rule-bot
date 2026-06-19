@@ -6,6 +6,7 @@ import type { CarLoanFormValues, InvestmentFormValues, MortgageFormValues } from
 import {
   assertCarLoanFormSanity,
   assertInvestmentFormSanity,
+  assertMortgageFormHardSanity,
   assertMortgageFormSanity,
 } from "@/lib/form-sanity";
 import {
@@ -52,7 +53,10 @@ export function assessMortgageForm(
   form: MortgageFormValues,
   options?: FormAssessOptions
 ): FormAssessResult {
-  if (!options?.sanityAcknowledged) {
+  if (options?.sanityAcknowledged) {
+    // User acknowledged soft plausibility warnings — only hard rejects still block.
+    assertMortgageFormHardSanity(form);
+  } else {
     assertMortgageFormSanity(form);
   }
   const state = mortgageStateFromForm(form);

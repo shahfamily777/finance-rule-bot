@@ -3,7 +3,7 @@ import {
   validateCarLoanForm,
   validateCarLoanInsuranceField,
   validateInvestmentForm,
-  validateMortgageForm,
+  validateMortgageFormHard,
 } from "@/lib/form-sanity";
 import type {
   CarLoanFormValues,
@@ -167,6 +167,11 @@ export function buildMortgagePurchasePayload(
   };
 }
 
+/**
+ * Mid-flow (per-step) validation only surfaces HARD rejects so the user is sent
+ * back to fix impossible inputs early. Soft plausibility warnings are deferred to
+ * the final submit, where they can be acknowledged and proceed to the assessment.
+ */
 export function validateMortgageGuidedStep(
   stepKind: string,
   payload: MortgageFormValues | null
@@ -174,11 +179,11 @@ export function validateMortgageGuidedStep(
   if (!payload) return { ok: true };
   if (stepKind === "property_tax" && payload.scenario === "purchase") {
     if (payload.monthlyPropertyTax == null || payload.homePrice == null) return { ok: true };
-    return validateMortgageForm(payload);
+    return validateMortgageFormHard(payload);
   }
   if (stepKind === "insurance" && payload.scenario === "purchase") {
     if (payload.monthlyInsurance == null) return { ok: true };
-    return validateMortgageForm(payload);
+    return validateMortgageFormHard(payload);
   }
   return { ok: true };
 }

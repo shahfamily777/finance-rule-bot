@@ -11,60 +11,7 @@ export type ExplainThreadMsg = { role: "user" | "assistant"; content: string };
 
 const spec = costlyMistakesSpec;
 
-function topicKnowledgeBlock(topic: CostlyMistakeTopic): string {
-  const list = (items: string[]) => items.map((i) => `- ${i}`).join("\n");
-  return `TOPIC: ${topic.name}
-What it is: ${topic.what_is_it.trim()}
-
-Why people buy it:
-${list(topic.why_people_buy)}
-
-Costs and tradeoffs:
-${list(topic.costs)}
-
-Who actually benefits:
-${list(topic.who_benefits)}
-
-Lower-cost alternatives:
-${list(topic.alternatives)}
-
-Good questions to ask before buying:
-${list(topic.questions_to_ask)}`;
-}
-
-export function buildCostlyMistakesSystemPrompt(topic: CostlyMistakeTopic): string {
-  return `You are the educational layer of "Finance Rules" for the **Avoid Costly Mistakes** module.
-
-MISSION: ${spec.intro.trim()}
-
-PRINCIPLE: ${spec.principle.trim()}
-
-YOU SHOULD:
-${spec.ai.should.map((s) => `- ${s}`).join("\n")}
-
-YOU MUST NOT:
-${spec.ai.should_not.map((s) => `- ${s}`).join("\n")}
-
-TONE: ${spec.ai.tone.join(", ")}.
-Example — avoid: "${spec.ai.example_style.avoid}" → use: "${spec.ai.example_style.use}".
-
-OUTPUT STYLE:
-- Keep responses short and clear (usually 2-4 short paragraphs).
-- Use bold sparingly, for key numbers or terms only.
-- Never call anything a scam, fraud, or rip-off. Explain costs and tradeoffs instead.
-- The goal is that the user leaves understanding the decision better — not pressured.
-
----
-${topicKnowledgeBlock(topic)}
----
-
-Answer the user's question using only the knowledge above and general, well-established
-financial concepts. If asked something outside this topic or this module, gently steer
-back to understanding ${topic.name}. End nothing with a hard recommendation — help them
-decide clearly. Always remember: ${spec.disclaimer}`;
-}
-
-/** Deterministic answer when no API key is configured. */
+/** Intent-matched, spec-driven educational answer. */
 export function fallbackCostlyMistakesAnswer(
   topic: CostlyMistakeTopic,
   userMessage: string
@@ -106,12 +53,16 @@ export function fallbackCostlyMistakesAnswer(
   )}\n\nAsk about the costs, who benefits, alternatives, or questions to ask. ${spec.disclaimer}`;
 }
 
-export async function explainCostlyMistake(params: {
+/**
+ * Deterministic educational answer for a costly-mistakes topic.
+ * Pulls from the structured spec (costs, alternatives, who benefits, etc.).
+ * No external model is called.
+ */
+export function explainCostlyMistake(params: {
   topicId: string;
   thread: ExplainThreadMsg[];
-  apiKey?: string;
-}): Promise<string | null> {
-  const { topicId, thread, apiKey } = params;
+}): string | null {
+  const { topicId, thread } = params;
   const topic = getCostlyMistakeTopic(topicId);
   if (!topic) return null;
 
@@ -119,52 +70,5 @@ export async function explainCostlyMistake(params: {
     [...thread].reverse().find((m) => m.role === "user")?.content ?? "";
   if (!userMessage.trim()) return null;
 
-  const fallback = fallbackCostlyMistakesAnswer(topic, userMessage);
-  if (!apiKey) return fallback;
-
-  const recent = thread
-    .slice(-8)
-    .map((m) => `${m.role}: ${m.content}`)
-    .join("\n");
-  const system = buildCostlyMistakesSystemPrompt(topic);
-
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0.4,
-        max_tokens: 450,
-        messages: [
-          { role: "system", content: system },
-          {
-            role: "user",
-            content: `Recent conversation:\n${recent}\n\nReply to the user's latest message about ${topic.name}. Stay calm, neutral, and educational — never call it a scam.`,
-          },
-        ],
-      }),
-    });
-
-    if (!res.ok) {
-      console.error(
-        "[costly-mistakes] OpenAI error",
-        res.status,
-        await res.text()
-      );
-      return fallback;
-    }
-
-    const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const content = data.choices?.[0]?.message?.content?.trim();
-    return content && content.length > 0 ? content : fallback;
-  } catch (e) {
-    console.error("[costly-mistakes]", e);
-    return fallback;
-  }
+  return fallbackCostlyMistakesAnswer(topic, userMessage);
 }

@@ -1,6 +1,7 @@
 /**
- * Calm, human explanations of fixed rules — used when a canned line would feel robotic.
- * Rules still decide outcomes; the model explains why and what to do next.
+ * Calm, human explanations of fixed rules.
+ * Fully deterministic — rules decide outcomes and these canned answers explain
+ * why and what to do next. No external model is called.
  * Behavior spec: specs/ai-behavior.yaml
  */
 
@@ -10,7 +11,6 @@ import { buildMortgageStructuredAssessment } from "@/lib/assessment-mortgage";
 import type { MortgageConversationState } from "@/lib/mortgage-flow";
 import { buildInvestmentStructuredAssessment } from "@/lib/assessment-investment";
 import type { ConversationState } from "@/lib/conversation";
-import { buildRuleExplainerSystemPrompt } from "@/lib/ai-behavior";
 import {
   isUserAskingQuestion,
   type TopicId,
@@ -138,45 +138,51 @@ function summarizeState(topic: TopicId, state: unknown): string {
   }
 }
 
-function fallbackExplain(
-  topic: TopicId,
-  userMessage: string,
+function savedNumbersBlock(stateSummary: string, marker: string): string {
+  return stateSummary.includes(marker)
+    ? `\n\nWith your saved numbers:\n${stateSummary}`
+    : "";
+}
+
+function explainCarLoan(
+  t: string,
   stateSummary: string,
   thread: ExplainThreadMsg[]
 ): string | null {
-  const t = userMessage.trim();
-
-  if (/\bwhy\s+is\s+this\s+risky\b/i.test(t)) {
-    if (topic === "car-loan") {
-      return (
-        "Risk here usually means **monthly pressure** — payment, insurance, and fuel eating too much of gross income, or a loan term that outlasts the car's value.\n\n" +
-        "Our rules cap stress at **10% transportation** of income and **48 months** max. Longer loans feel easier monthly but leave you paying more total and often upside-down.\n\n" +
-        (stateSummary.includes("Checklist")
-          ? `Your assessment:\n${stateSummary.split("\n").slice(-2).join("\n")}`
-          : "Update your numbers if anything changed.")
-      );
-    }
-    if (topic === "mortgage") {
-      return (
-        "Risk here is mostly **monthly rigidity** — housing costs that leave little room if income dips, plus buying without cash reserves for down, closing, and emergencies.\n\n" +
-        "We focus on **≤35% of gross income** for housing and full cash readiness before buying — not stretching to the approval maximum."
-      );
-    }
+  if (/\brisky\b|why.*risk/i.test(t)) {
     return (
-      "Risk in this section usually means skipping safety layers (emergency fund, debt payoff) before investing — or investing before your basics are in place.\n\n" +
-      "The priority order exists to reduce stress, not to optimize returns."
+      "Risk here usually means **monthly pressure** — loan payment, insurance, and fuel eating too much of gross income, or a loan term that outlasts the car's value.\n\n" +
+      "Our rules cap stress at **10% transportation** of gross income and **48 months** max. Longer loans feel easier month to month but cost more overall and often leave you **upside-down** (owing more than the car is worth)." +
+      savedNumbersBlock(stateSummary, "Checklist")
     );
   }
 
-  if (/\bcompare\b/i.test(t) && /\b(48|72|60)\b/i.test(t) && topic === "car-loan") {
+  if (/\bcompare\b/i.test(t) && /\b(48|72|60)\b/i.test(t)) {
     return (
-      "**48 months** is our maximum — acceptable and usually less total interest than longer terms.\n\n" +
+      "**48 months** is our maximum — acceptable, and usually less total interest than longer terms.\n\n" +
       "**60 or 72 months** lower the monthly payment but increase total cost and upside-down risk. This app **does not** use or recommend them.\n\n" +
-      "If 48 months feels tight, the fix is price, down payment, or rate — not a longer term."
+      "If 48 months feels tight, the fix is a lower price, more down, or a better rate — not a longer term."
     );
   }
 
-  if (topic !== "car-loan") return null;
+  if (/safer\s+payment|what\s+payment.*safe|payment.*safer/i.test(t)) {
+    return (
+      "A payment is **safe** here when loan payment + insurance + gas/charging together stay at or under **10% of your gross monthly income**.\n\n" +
+      "So take your gross monthly income × 10%, subtract insurance and fuel, and what's left is the most your **loan payment** should be. If your real payment (at 48 months or less and your APR) is above that, lower the price or put more down." +
+      savedNumbersBlock(stateSummary, "Vehicle")
+    );
+  }
+
+  if (
+    /income.*(increase|grow|goes up|higher|raise)/i.test(t) ||
+    /(if|when).*income/i.test(t)
+  ) {
+    return (
+      "Higher income raises your **10% transportation budget**, so a given car becomes easier to fit — but the other two rules don't move: still **≥20% down** and **≤48 months**.\n\n" +
+      "If a raise is the only reason a car fits, it's worth waiting until the income is actually steady before stretching, rather than counting on it." +
+      savedNumbersBlock(stateSummary, "Vehicle")
+    );
+  }
 
   if (isConversationalNumericReply(t, thread)) {
     const raw = t.replace(/,/g, "").replace(/^\$/, "");
@@ -187,42 +193,30 @@ function fallbackExplain(
       return (
         `Got it — **$${amt.toLocaleString()}** down.\n\n` +
         "That's separate from the **48-month term cap** (48 months is the longest loan we allow, not a down-payment program).\n\n" +
-        "Next, compare that down payment to **20% of the car price**. If the **monthly payment at 48 months or less** still busts the **10% transportation** rule, the usual fixes are a lower purchase price, saving more for down, a better rate, or waiting — not a 60- or 72-month loan.\n\n" +
-        (stateSummary.includes("Vehicle")
-          ? `Your saved checklist:\n${stateSummary}`
-          : "Use **Update your numbers** if you want to plug this into your full checklist.")
+        "Next, compare that down payment to **20% of the car price**. If the **monthly payment at 48 months or less** still busts the **10% transportation** rule, the usual fixes are a lower purchase price, saving more for down, a better rate, or waiting — not a 60- or 72-month loan." +
+        savedNumbersBlock(stateSummary, "Vehicle")
       );
     }
   }
 
-  if (
-    /\bwhy\b/i.test(t) &&
-    /\b(48|four year|longer|beyond|more than|maximum)\b/i.test(t)
-  ) {
+  if (/\bwhy\b/i.test(t) && /\b(48|four year|longer|beyond|more than|maximum)\b/i.test(t)) {
     return (
       "We keep car loans at **48 months or less** because the car loses value much faster than the loan balance drops on long terms — that's how people end up upside-down and stuck.\n\n" +
-      "That rule isn't negotiable in this app, but **shorter** than 48 is fine. If 48 months still feels tight, it usually means the car, down payment, or rate needs adjusting — not a 60- or 72-month loan.\n\n" +
-      (stateSummary.includes("Vehicle")
-        ? `With your saved numbers:\n${stateSummary}\n\n`
-        : "") +
-      "Practical levers: more down, a lower purchase price, a lower APR, or waiting until cash flow is clearer."
+      "That rule isn't negotiable in this app, but **shorter** than 48 is fine. If 48 months still feels tight, it usually means the car, down payment, or rate needs adjusting — not a 60- or 72-month loan." +
+      savedNumbersBlock(stateSummary, "Vehicle") +
+      "\n\nPractical levers: more down, a lower purchase price, a lower APR, or waiting until cash flow is clearer."
     );
   }
 
-  if (
-    /\b(not enough|don't have enough|can't).{0,40}down\b/i.test(t) &&
-    /\b48\b/i.test(t)
-  ) {
+  if (/\b(not enough|don't have enough|can't).{0,40}down\b/i.test(t) && /\b48\b/i.test(t)) {
     return (
       "It sounds like two ideas got tangled: **48 months** is the **longest loan term** we allow — it isn't a down-payment amount or a special program.\n\n" +
       "If the **payment** at 48 months feels too high, that's separate from the **20% down** rule. You can:\n" +
       "• Save toward more down (reduces the loan and payment)\n" +
       "• Choose a less expensive car\n" +
       "• Shop for a better APR\n" +
-      "• Wait until the numbers fit — we don't extend past 48 months to make the payment work\n\n" +
-      (stateSummary.includes("Down payment")
-        ? `From what you entered before:\n${stateSummary}`
-        : "If you share or update your price, down payment, and income, we can rerun the checklist.")
+      "• Wait until the numbers fit — we don't extend past 48 months to make the payment work" +
+      savedNumbersBlock(stateSummary, "Down payment")
     );
   }
 
@@ -232,63 +226,142 @@ function fallbackExplain(
       "1) Confirm the **price** and whether **20% down** is realistic (or how far you are from it).\n" +
       "2) Run the payment at **48 months or less** with your real APR — if it's over **10% of gross income** with insurance and fuel, the car is probably too expensive for now.\n" +
       "3) Adjust price, down, or timing — not the term past 48 months.\n\n" +
-      "Use **Update your numbers** if you want to change what's saved and see an updated assessment."
+      "Use **Update your numbers** to change what's saved and see an updated assessment."
     );
   }
 
   return null;
 }
 
-export async function explainRuleQuestion(params: {
+function explainMortgage(t: string, stateSummary: string): string | null {
+  if (/\brisky\b|why.*risk/i.test(t)) {
+    return (
+      "Risk here is mostly **monthly rigidity** — housing costs that leave little room if income dips, plus buying without cash reserves for the down payment, closing, and emergencies.\n\n" +
+      "That's why we keep total housing (principal & interest + property tax + insurance + HOA/maintenance) at **≤35% of gross income**, and require **20% down + closing costs + a funded emergency fund in cash** before buying — not stretching to the approval maximum." +
+      savedNumbersBlock(stateSummary, "Checklist")
+    );
+  }
+
+  if (
+    /max.*(home|house|price|afford)/i.test(t) ||
+    /how.*(calculate|work out|get).*price/i.test(t) ||
+    /35\s*%/i.test(t)
+  ) {
+    return (
+      "The **max affordable price** is the highest price where total monthly housing still fits **35% of your gross income**.\n\n" +
+      "We take 35% of your gross monthly income as the housing ceiling, then solve for the price whose **principal & interest** (at your rate, term, and down payment) plus **property tax, insurance, and HOA** lands at or just under that ceiling.\n\n" +
+      "Raising income, putting more down, a lower rate, or a shorter price all push that number up." +
+      savedNumbersBlock(stateSummary, "Checklist")
+    );
+  }
+
+  if (/rent/i.test(t) || /instead of buying|keep renting|ready to buy/i.test(t)) {
+    return (
+      "Our rules say **keep renting** until you have all three in cash (not borrowed):\n" +
+      "1) **20% down**\n" +
+      "2) **Closing costs**\n" +
+      "3) A funded **emergency fund** that stays intact after closing\n\n" +
+      "And the resulting housing payment must still fit **≤35% of gross income**. If any piece is missing, renting a bit longer is the lower-stress move — it isn't a failure, it's timing." +
+      savedNumbersBlock(stateSummary, "Checklist")
+    );
+  }
+
+  if (/lower|reduce|cheaper|bring down/i.test(t) && /payment|cost|housing|monthly/i.test(t)) {
+    return (
+      "The biggest levers on monthly housing cost, roughly in order:\n" +
+      "1) **Lower purchase price** — shrinks loan, tax, and insurance together.\n" +
+      "2) **More down payment** — directly reduces the loan you finance.\n" +
+      "3) **Lower interest rate** — shop lenders; even a fraction of a point helps.\n" +
+      "4) **30-year vs 15-year term** — a 30-year lowers the monthly payment (but costs more interest overall; we allow both).\n\n" +
+      "Property tax and insurance are mostly set by the home, so price is usually the strongest single lever." +
+      savedNumbersBlock(stateSummary, "Checklist")
+    );
+  }
+
+  if (/refinanc|refi\b/i.test(t)) {
+    return (
+      "We refinance when the **new rate is at least 1 percentage point lower** than your current rate (e.g. 7% → 6% or better) — and only after checking that closing costs are worth it for how long you'll keep the loan." +
+      savedNumbersBlock(stateSummary, "Checklist")
+    );
+  }
+
+  if (/15|30/i.test(t) && /year|term/i.test(t)) {
+    return (
+      "We only use **15- or 30-year** mortgages.\n\n" +
+      "**15-year:** higher monthly payment, much less total interest, equity builds fast.\n" +
+      "**30-year:** lower monthly payment, more total interest.\n\n" +
+      "Pick based on cash flow — but don't go outside 15 or 30."
+    );
+  }
+
+  return null;
+}
+
+function explainInvestment(t: string, stateSummary: string): string | null {
+  if (/\brisky\b|why.*risk/i.test(t)) {
+    return (
+      "Risk in this section usually means **skipping safety layers** — investing extra before you've captured your employer match, cleared high-interest debt, or built an emergency fund.\n\n" +
+      "The priority order exists to reduce stress and forced selling, not to chase the highest return. Each step protects the ones after it." +
+      savedNumbersBlock(stateSummary, "status")
+    );
+  }
+
+  if (/why.*(order|sequence|this way)/i.test(t) || /sequence/i.test(t)) {
+    return (
+      "The order goes **safety and guaranteed wins first, then long-term growth**:\n\n" +
+      "1) **Employer match** — an instant return you can't beat elsewhere.\n" +
+      "2) **Starter emergency fund (~$2,000)** — stops a surprise from becoming debt.\n" +
+      "3) **High-interest debt** — a guaranteed cost that usually outruns market gains.\n" +
+      "4) **Full emergency fund (3–6 months)** — lets you invest with a steady hand.\n" +
+      "5–8) **HSA, Roth IRA, max 401(k), then taxable brokerage** — tax-advantaged growth before regular investing.\n\n" +
+      "It's fixed on purpose — earlier steps make the later ones safer." +
+      savedNumbersBlock(stateSummary, "status")
+    );
+  }
+
+  if (/match/i.test(t)) {
+    return (
+      "The **401(k) employer match is first** because it's the closest thing to free money — an immediate, guaranteed return on every dollar you contribute (often 50–100%).\n\n" +
+      "No investment reliably beats that, so we capture the full match before anything else — even before paying down debt."
+    );
+  }
+
+  if (/debt/i.test(t)) {
+    return (
+      "Pay down **high-interest debt** (think credit cards) **before investing extra** — but **after** you've grabbed the full 401(k) match and built a ~$2,000 starter emergency fund.\n\n" +
+      "The reason: high-interest debt is a **guaranteed** cost that's hard to beat in the market, so clearing it is effectively a risk-free return." +
+      savedNumbersBlock(stateSummary, "status")
+    );
+  }
+
+  return null;
+}
+
+function fallbackExplain(
+  topic: TopicId,
+  userMessage: string,
+  stateSummary: string,
+  thread: ExplainThreadMsg[]
+): string | null {
+  const t = userMessage.trim();
+  if (topic === "car-loan") return explainCarLoan(t, stateSummary, thread);
+  if (topic === "mortgage") return explainMortgage(t, stateSummary);
+  return explainInvestment(t, stateSummary);
+}
+
+/**
+ * Deterministic explanation of a rule question. Outcomes come from the rule
+ * engine; this only phrases the "why" and "what next" from fixed copy.
+ */
+export function explainRuleQuestion(params: {
   topic: TopicId;
   thread: ExplainThreadMsg[];
   state: unknown;
-  apiKey?: string;
-}): Promise<string | null> {
-  const { topic, thread, state, apiKey } = params;
+}): string | null {
+  const { topic, thread, state } = params;
   const userMessage = [...thread].reverse().find((m) => m.role === "user")?.content ?? "";
   if (!userMessage.trim()) return null;
 
   const stateSummary = summarizeState(topic, state);
-  const fallback = fallbackExplain(topic, userMessage, stateSummary, thread);
-  if (!apiKey) return fallback;
-
-  const recent = thread.slice(-8).map((m) => `${m.role}: ${m.content}`).join("\n");
-  const system = buildRuleExplainerSystemPrompt(topic, stateSummary);
-
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0.5,
-        max_tokens: 450,
-        messages: [
-          { role: "system", content: system },
-          {
-            role: "user",
-            content: `Recent conversation:\n${recent}\n\nReply to the user's latest message. Rules decide — you explain. Stay in ${topic} topic.`,
-          },
-        ],
-      }),
-    });
-
-    if (!res.ok) {
-      console.error("[rule-explainer] OpenAI error", res.status, await res.text());
-      return fallback;
-    }
-
-    const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const content = data.choices?.[0]?.message?.content?.trim();
-    return content && content.length > 0 ? content : fallback;
-  } catch (e) {
-    console.error("[rule-explainer]", e);
-    return fallback;
-  }
+  return fallbackExplain(topic, userMessage, stateSummary, thread);
 }

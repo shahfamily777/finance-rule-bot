@@ -8,7 +8,10 @@ import {
   type GuidedSubmitOptions,
 } from "@/components/guided/useSanityAck";
 import type { MortgageFormValues } from "@/lib/form-types";
-import { validateMortgageForm } from "@/lib/form-sanity";
+import {
+  validateMortgageForm,
+  validateMortgageHomePriceField,
+} from "@/lib/form-sanity";
 import {
   buildMortgagePurchasePayload,
   mortgageGuidedStepForError,
@@ -209,12 +212,14 @@ export function MortgageGuidedFlow({
     );
   }
 
+  /**
+   * Soft plausibility warnings: warn once, then proceed on the next Continue.
+   * We intentionally stay on the current (final) step instead of jumping to the
+   * field the message mentions — jumping away would reset the two-click
+   * acknowledgment and prevent the user from ever reaching the assessment.
+   */
   function handleSanity(message: string, onProceed: () => void) {
     if (warnOrProceed(message, setError)) {
-      const target = mortgageGuidedStepForError(message, steps);
-      if (target !== step) {
-        setStep(() => target);
-      }
       return;
     }
     setError(null);
@@ -229,8 +234,13 @@ export function MortgageGuidedFlow({
     }
     if (kind === "home_price") {
       const hp = parseNum(homePrice);
-      if (hp === null || hp <= 0) {
+      if (hp === null) {
         setError("Enter a valid home price.");
+        return;
+      }
+      const priceSanity = validateMortgageHomePriceField(hp);
+      if (!priceSanity.ok) {
+        setError(priceSanity.message);
         return;
       }
     }
@@ -293,7 +303,10 @@ export function MortgageGuidedFlow({
       const payload = getPurchasePayload();
       const stepSanity = validateMortgageGuidedStep("insurance", payload);
       if (!stepSanity.ok) {
-        handleSanity(stepSanity.message, () => setStep((s) => s + 1));
+        // Mid-flow only catches HARD rejects — block and send the user to fix it.
+        setError(stepSanity.message);
+        const target = mortgageGuidedStepForError(stepSanity.message, steps);
+        if (target !== step) setStep(() => target);
         return;
       }
     }
@@ -332,6 +345,12 @@ export function MortgageGuidedFlow({
         };
         const refiSanity = validateMortgageForm(refiPayload);
         if (!refiSanity.ok) {
+          if (refiSanity.severity === "hard") {
+            setError(refiSanity.message);
+            const target = mortgageGuidedStepForError(refiSanity.message, steps);
+            if (target !== step) setStep(() => target);
+            return;
+          }
           handleSanity(refiSanity.message, () =>
             onSubmit(refiPayload, { sanityAcknowledged: true })
           );
@@ -347,6 +366,13 @@ export function MortgageGuidedFlow({
       }
       const purchaseSanity = validateMortgageForm(payload);
       if (!purchaseSanity.ok) {
+        if (purchaseSanity.severity === "hard") {
+          // Hard rejects (impossible/typo'd inputs) always block — never acknowledgeable.
+          setError(purchaseSanity.message);
+          const target = mortgageGuidedStepForError(purchaseSanity.message, steps);
+          if (target !== step) setStep(() => target);
+          return;
+        }
         handleSanity(purchaseSanity.message, () =>
           onSubmit(payload, { sanityAcknowledged: true })
         );
