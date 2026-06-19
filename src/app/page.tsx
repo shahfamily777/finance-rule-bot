@@ -65,6 +65,7 @@ const SECTIONS: {
  */
 type HubItem =
   | { kind: "section"; id: SectionId; title: string; blurb: string }
+  | { kind: "view"; view: "costly-mistakes"; emoji: string; title: string; blurb: string }
   | { kind: "coming-soon"; emoji: string; title: string; blurb: string };
 
 type HubGroupConfig = {
@@ -76,7 +77,7 @@ type HubGroupConfig = {
 const HUB_GROUPS: HubGroupConfig[] = [
   {
     title: "Build Wealth",
-    description: "Grow your money with a clear, ordered plan.",
+    description: "Create a strong financial foundation and grow wealth intentionally.",
     items: [
       {
         kind: "section",
@@ -84,17 +85,11 @@ const HUB_GROUPS: HubGroupConfig[] = [
         title: "Invest",
         blurb: "Where your next dollar should go",
       },
-      {
-        kind: "coming-soon",
-        emoji: "💳",
-        title: "Debt",
-        blurb: "Pay it down in the right order",
-      },
     ],
   },
   {
     title: "Major Decisions",
-    description: "Pressure-test a big purchase before you commit.",
+    description: "Evaluate major purchases before making long-term commitments.",
     items: [
       {
         kind: "section",
@@ -108,23 +103,36 @@ const HUB_GROUPS: HubGroupConfig[] = [
         title: "Car Loan",
         blurb: "Can I afford this car?",
       },
+    ],
+  },
+  {
+    title: "Learn",
+    description: "Understand financial concepts and avoid expensive mistakes.",
+    items: [
+      {
+        kind: "view",
+        view: "costly-mistakes",
+        emoji: "🛡️",
+        title: "Avoid Costly Mistakes",
+        blurb: "Understand big decisions before committing",
+      },
+    ],
+  },
+  {
+    title: "Coming soon",
+    description: "Not available yet — we're still building these.",
+    items: [
+      {
+        kind: "coming-soon",
+        emoji: "💳",
+        title: "Debt",
+        blurb: "Pay it down in the right order",
+      },
       {
         kind: "coming-soon",
         emoji: "🛍️",
         title: "Can I Buy This?",
         blurb: "Quick purchase sanity checks",
-      },
-    ],
-  },
-  {
-    title: "Learn",
-    description: "Build money skills and sidestep expensive mistakes.",
-    items: [
-      {
-        kind: "coming-soon",
-        emoji: "🛡️",
-        title: "Avoid Costly Mistakes",
-        blurb: "Understand big decisions before committing",
       },
       {
         kind: "coming-soon",
@@ -536,6 +544,50 @@ export default function Home() {
     );
   }
 
+  function renderViewCard(
+    targetView: "costly-mistakes",
+    emoji: string,
+    title: string,
+    blurb: string
+  ) {
+    return (
+      <button
+        key={targetView}
+        type="button"
+        onClick={() => {
+          trackClick(targetView, {
+            event: "section_open",
+            label: `section:${targetView}`,
+          });
+          setStartHereComingSoon(null);
+          setView(targetView);
+        }}
+        className="hub-card group relative flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border border-teal-200/60 p-0 text-left shadow-sm shadow-teal-500/10 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-teal-500/20 active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+      >
+        <div className="flex-1 bg-gradient-to-br from-teal-500 via-emerald-500 to-green-500 px-5 py-6 text-white">
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-200" aria-hidden />
+            Available
+          </span>
+          <div className="hub-icon mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 text-2xl">
+            {emoji}
+          </div>
+          <span className="text-lg font-bold">{title}</span>
+          <span className="mt-1 block text-sm text-white/85">{blurb}</span>
+        </div>
+        <div className="flex items-center justify-between bg-white/90 px-5 py-3.5 text-sm font-semibold text-slate-700 backdrop-blur-sm transition-colors group-hover:text-slate-900">
+          <span>Get started</span>
+          <span
+            className="transition-transform duration-300 group-hover:translate-x-1"
+            aria-hidden
+          >
+            →
+          </span>
+        </div>
+      </button>
+    );
+  }
+
   async function sendPrompt(prompt: GuidedPrompt) {
     if (!section || phase !== "chat") return;
     setInput("");
@@ -694,8 +746,9 @@ export default function Home() {
           <h1 className="bg-gradient-to-r from-indigo-700 via-violet-700 to-fuchsia-600 bg-clip-text text-3xl font-bold tracking-tight text-transparent sm:text-4xl">
             Finance Rules
           </h1>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-600">
-            Make calmer and clearer money decisions.
+          <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-slate-600">
+            Make calmer, clearer money decisions — and avoid the costly mistakes
+            that quietly set you back.
           </p>
           <p className="mx-auto mt-2 max-w-lg text-xs text-slate-500">
             Rules decide. We explain. Structured guidance — not a generic chatbot.
@@ -704,6 +757,17 @@ export default function Home() {
 
         {view === "hub" ? (
           <div className="space-y-12">
+            <section className="mx-auto max-w-xl text-center">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Our philosophy
+              </p>
+              <p className="mt-2 text-[15px] leading-relaxed text-slate-600">
+                Most financial mistakes come from a handful of major decisions.
+                Before buying a house, financing a car, investing, or taking on
+                debt, understand the tradeoffs first.
+              </p>
+            </section>
+
             <button
               type="button"
               onClick={() => {
@@ -720,9 +784,12 @@ export default function Home() {
                 🧭
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-lg font-bold">Start here</span>
+                <span className="block text-lg font-bold">
+                  Not sure where to begin?
+                </span>
                 <span className="mt-0.5 block text-sm text-white/85">
-                  Answer one question and we&apos;ll guide you to the right section.
+                  Answer a few quick questions and get pointed to the most
+                  relevant financial decision tool.
                 </span>
               </span>
               <span
@@ -742,6 +809,8 @@ export default function Home() {
                 {group.items.map((item) =>
                   item.kind === "section" ? (
                     renderSectionCard(item.id, item.title, item.blurb)
+                  ) : item.kind === "view" ? (
+                    renderViewCard(item.view, item.emoji, item.title, item.blurb)
                   ) : (
                     <ComingSoonCard
                       key={item.title}
@@ -753,6 +822,27 @@ export default function Home() {
                 )}
               </HubGroup>
             ))}
+
+            <section className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 backdrop-blur-sm">
+              <h2 className="text-base font-bold tracking-tight text-slate-900">
+                Why Finance Rules?
+              </h2>
+              <ul className="mt-3 space-y-2 text-sm leading-relaxed text-slate-600">
+                {[
+                  "Structured assessments instead of generic chatbot answers",
+                  "Transparent rules and reasoning",
+                  "No financial products to sell",
+                  "Designed to help people make better decisions",
+                ].map((point) => (
+                  <li key={point} className="flex gap-2.5">
+                    <span className="mt-0.5 shrink-0 font-bold text-emerald-500" aria-hidden>
+                      ✓
+                    </span>
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           </div>
         ) : view === "costly-mistakes" ? (
           <>

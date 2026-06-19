@@ -14,14 +14,9 @@ type Option = {
   destination: StartHereDestination;
 };
 
+// Active destinations first; "coming soon" options are listed last and shown
+// disabled so they can't be clicked accidentally.
 const OPTIONS: Option[] = [
-  {
-    id: "debt",
-    emoji: "💳",
-    label: "Pay off debt",
-    sub: "Tackle credit cards or loans in the right order",
-    destination: { kind: "coming-soon", title: "Debt" },
-  },
   {
     id: "invest",
     emoji: "📈",
@@ -42,6 +37,13 @@ const OPTIONS: Option[] = [
     label: "Buy a car",
     sub: "See if the loan fits your budget",
     destination: { kind: "section", id: "car-loan" },
+  },
+  {
+    id: "debt",
+    emoji: "💳",
+    label: "Pay off debt",
+    sub: "Tackle credit cards or loans in the right order",
+    destination: { kind: "coming-soon", title: "Debt" },
   },
   {
     id: "purchase",
@@ -74,28 +76,53 @@ export function StartHere({
       </div>
 
       <ul className="space-y-2.5">
-        {OPTIONS.map((o) => (
-          <li key={o.id}>
-            <button
-              type="button"
-              onClick={() => onPick(o.destination)}
-              className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xl">
-                {o.emoji}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-slate-900">
-                  {o.label}
+        {OPTIONS.map((o) => {
+          if (o.destination.kind === "coming-soon") {
+            return (
+              <li key={o.id}>
+                <div
+                  aria-disabled="true"
+                  className="flex w-full items-center gap-3 rounded-xl border border-dashed border-slate-300/80 bg-white/40 px-4 py-3 text-left opacity-60"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xl">
+                    {o.emoji}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-slate-700">
+                      {o.label}
+                    </span>
+                    <span className="block text-xs text-slate-500">{o.sub}</span>
+                  </span>
+                  <span className="ml-auto inline-flex shrink-0 items-center rounded-full bg-slate-200/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Soon
+                  </span>
+                </div>
+              </li>
+            );
+          }
+          return (
+            <li key={o.id}>
+              <button
+                type="button"
+                onClick={() => onPick(o.destination)}
+                className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xl">
+                  {o.emoji}
                 </span>
-                <span className="block text-xs text-slate-500">{o.sub}</span>
-              </span>
-              <span className="ml-auto text-slate-300" aria-hidden>
-                →
-              </span>
-            </button>
-          </li>
-        ))}
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-slate-900">
+                    {o.label}
+                  </span>
+                  <span className="block text-xs text-slate-500">{o.sub}</span>
+                </span>
+                <span className="ml-auto text-slate-300" aria-hidden>
+                  →
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
 
       {comingSoonTitle ? (
