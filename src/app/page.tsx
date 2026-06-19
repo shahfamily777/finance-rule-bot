@@ -65,8 +65,7 @@ const SECTIONS: {
  */
 type HubItem =
   | { kind: "section"; id: SectionId; title: string; blurb: string }
-  | { kind: "view"; view: "costly-mistakes"; emoji: string; title: string; blurb: string }
-  | { kind: "coming-soon"; emoji: string; title: string; blurb: string };
+  | { kind: "view"; view: "costly-mistakes"; emoji: string; title: string; blurb: string };
 
 type HubGroupConfig = {
   title: string;
@@ -77,7 +76,7 @@ type HubGroupConfig = {
 const HUB_GROUPS: HubGroupConfig[] = [
   {
     title: "Build Wealth",
-    description: "Create a strong financial foundation and grow wealth intentionally.",
+    description: "Grow wealth intentionally.",
     items: [
       {
         kind: "section",
@@ -89,7 +88,7 @@ const HUB_GROUPS: HubGroupConfig[] = [
   },
   {
     title: "Major Decisions",
-    description: "Evaluate major purchases before making long-term commitments.",
+    description: "Evaluate major purchases.",
     items: [
       {
         kind: "section",
@@ -107,7 +106,7 @@ const HUB_GROUPS: HubGroupConfig[] = [
   },
   {
     title: "Learn",
-    description: "Understand financial concepts and avoid expensive mistakes.",
+    description: "Avoid costly mistakes.",
     items: [
       {
         kind: "view",
@@ -118,31 +117,9 @@ const HUB_GROUPS: HubGroupConfig[] = [
       },
     ],
   },
-  {
-    title: "Coming soon",
-    description: "Not available yet — we're still building these.",
-    items: [
-      {
-        kind: "coming-soon",
-        emoji: "💳",
-        title: "Debt",
-        blurb: "Pay it down in the right order",
-      },
-      {
-        kind: "coming-soon",
-        emoji: "🛍️",
-        title: "Can I Buy This?",
-        blurb: "Quick purchase sanity checks",
-      },
-      {
-        kind: "coming-soon",
-        emoji: "📚",
-        title: "Financial Literacy",
-        blurb: "Core money concepts, explained",
-      },
-    ],
-  },
 ];
+
+const ROADMAP_ITEMS = ["Debt", "Can I Buy This?", "Financial Literacy"];
 
 function IconCar({ className }: { className?: string }) {
   return (
@@ -302,33 +279,6 @@ function HubGroup({
         {children}
       </div>
     </section>
-  );
-}
-
-function ComingSoonCard({
-  emoji,
-  title,
-  blurb,
-}: {
-  emoji: string;
-  title: string;
-  blurb: string;
-}) {
-  return (
-    <div
-      className="relative flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border border-dashed border-slate-300/80 bg-white/40 p-5 text-left opacity-70"
-      aria-disabled="true"
-    >
-      <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-slate-200/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden />
-        Coming soon
-      </span>
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-2xl">
-        {emoji}
-      </div>
-      <span className="text-lg font-bold text-slate-700">{title}</span>
-      <span className="mt-1 text-sm leading-relaxed text-slate-500">{blurb}</span>
-    </div>
   );
 }
 
@@ -514,9 +464,9 @@ export default function Home() {
         key={id}
         type="button"
         onClick={() => openSection(id)}
-        className={`hub-card group relative flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border ${t.hub.border} p-0 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 active:translate-y-0 ${t.hub.shadow} ${t.hub.hoverShadow} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500`}
+        className={`hub-card group relative flex min-h-[9.5rem] flex-col overflow-hidden rounded-2xl border ${t.hub.border} p-0 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 active:translate-y-0 ${t.hub.shadow} ${t.hub.hoverShadow} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500`}
       >
-        <div className={`${t.hub.gradient} flex-1 px-5 py-6 text-white`}>
+        <div className={`${t.hub.gradient} flex-1 px-6 py-7 text-white`}>
           <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" aria-hidden />
             Available
@@ -531,8 +481,8 @@ export default function Home() {
           </span>
           <span className="mt-1 block text-sm text-white/85">{blurb}</span>
         </div>
-        <div className="flex items-center justify-between bg-white/90 px-5 py-3.5 text-sm font-semibold text-slate-700 backdrop-blur-sm transition-colors group-hover:text-slate-900">
-          <span>Get started</span>
+        <div className="flex items-center justify-between bg-white/90 px-6 py-4 text-sm font-semibold text-slate-700 backdrop-blur-sm transition-colors group-hover:text-slate-900">
+          <span>Get Started</span>
           <span
             className="transition-transform duration-300 group-hover:translate-x-1"
             aria-hidden
@@ -562,9 +512,9 @@ export default function Home() {
           setStartHereComingSoon(null);
           setView(targetView);
         }}
-        className="hub-card group relative flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border border-teal-200/60 p-0 text-left shadow-sm shadow-teal-500/10 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-teal-500/20 active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+        className="hub-card group relative flex min-h-[9.5rem] flex-col overflow-hidden rounded-2xl border border-teal-200/60 p-0 text-left shadow-sm shadow-teal-500/10 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-teal-500/20 active:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
       >
-        <div className="flex-1 bg-gradient-to-br from-teal-500 via-emerald-500 to-green-500 px-5 py-6 text-white">
+        <div className="flex-1 bg-gradient-to-br from-teal-500 via-emerald-500 to-green-500 px-6 py-7 text-white">
           <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-200" aria-hidden />
             Available
@@ -575,8 +525,8 @@ export default function Home() {
           <span className="text-lg font-bold">{title}</span>
           <span className="mt-1 block text-sm text-white/85">{blurb}</span>
         </div>
-        <div className="flex items-center justify-between bg-white/90 px-5 py-3.5 text-sm font-semibold text-slate-700 backdrop-blur-sm transition-colors group-hover:text-slate-900">
-          <span>Get started</span>
+        <div className="flex items-center justify-between bg-white/90 px-6 py-4 text-sm font-semibold text-slate-700 backdrop-blur-sm transition-colors group-hover:text-slate-900">
+          <span>Get Started</span>
           <span
             className="transition-transform duration-300 group-hover:translate-x-1"
             aria-hidden
@@ -747,27 +697,19 @@ export default function Home() {
             Finance Rules
           </h1>
           <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-slate-600">
-            Make calmer, clearer money decisions — and avoid the costly mistakes
-            that quietly set you back.
+            Make calmer and clearer money decisions.
           </p>
-          <p className="mx-auto mt-2 max-w-lg text-xs text-slate-500">
-            Rules decide. We explain. Structured guidance — not a generic chatbot.
+          <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-500">
+            Spend intentionally.
+            <br />
+            Avoid costly mistakes.
+            <br />
+            Build wealth through simple decisions.
           </p>
         </header>
 
         {view === "hub" ? (
           <div className="space-y-12">
-            <section className="mx-auto max-w-xl text-center">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Our philosophy
-              </p>
-              <p className="mt-2 text-[15px] leading-relaxed text-slate-600">
-                Most financial mistakes come from a handful of major decisions.
-                Before buying a house, financing a car, investing, or taking on
-                debt, understand the tradeoffs first.
-              </p>
-            </section>
-
             <button
               type="button"
               onClick={() => {
@@ -807,21 +749,27 @@ export default function Home() {
                 description={group.description}
               >
                 {group.items.map((item) =>
-                  item.kind === "section" ? (
-                    renderSectionCard(item.id, item.title, item.blurb)
-                  ) : item.kind === "view" ? (
-                    renderViewCard(item.view, item.emoji, item.title, item.blurb)
-                  ) : (
-                    <ComingSoonCard
-                      key={item.title}
-                      emoji={item.emoji}
-                      title={item.title}
-                      blurb={item.blurb}
-                    />
-                  )
+                  item.kind === "section"
+                    ? renderSectionCard(item.id, item.title, item.blurb)
+                    : renderViewCard(item.view, item.emoji, item.title, item.blurb)
                 )}
               </HubGroup>
             ))}
+
+            <section className="px-1">
+              <h2 className="text-base font-bold tracking-tight text-slate-900">
+                Roadmap
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Coming soon:{" "}
+                {ROADMAP_ITEMS.map((item, i) => (
+                  <span key={item}>
+                    {i > 0 ? ", " : ""}
+                    {item}
+                  </span>
+                ))}
+              </p>
+            </section>
 
             <section className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 backdrop-blur-sm">
               <h2 className="text-base font-bold tracking-tight text-slate-900">
