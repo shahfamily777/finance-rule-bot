@@ -57,21 +57,84 @@ const SECTIONS: {
   },
 ];
 
-type ComingSoonCard = { emoji: string; title: string; blurb: string };
+/**
+ * Homepage hub is fully config-driven. Active cards link to a live section via
+ * `openSection`; `coming-soon` cards are purely presentational (badge + disabled).
+ * To re-enable a Coming Soon item, swap its entry back to a `section` item — the
+ * underlying feature code/routes are left untouched.
+ */
+type HubItem =
+  | { kind: "section"; id: SectionId; title: string; blurb: string }
+  | { kind: "coming-soon"; emoji: string; title: string; blurb: string };
 
-const COMING_SOON: Record<string, ComingSoonCard> = {
-  debt: { emoji: "💳", title: "Debt", blurb: "Pay it down in the right order" },
-  "can-i-buy-this": {
-    emoji: "🛍️",
-    title: "Can I Buy This?",
-    blurb: "Quick purchase sanity checks",
-  },
-  "financial-literacy": {
-    emoji: "📚",
-    title: "Financial Literacy",
-    blurb: "Core money concepts, explained",
-  },
+type HubGroupConfig = {
+  title: string;
+  description: string;
+  items: HubItem[];
 };
+
+const HUB_GROUPS: HubGroupConfig[] = [
+  {
+    title: "Build Wealth",
+    description: "Grow your money with a clear, ordered plan.",
+    items: [
+      {
+        kind: "section",
+        id: "investment",
+        title: "Invest",
+        blurb: "Where your next dollar should go",
+      },
+      {
+        kind: "coming-soon",
+        emoji: "💳",
+        title: "Debt",
+        blurb: "Pay it down in the right order",
+      },
+    ],
+  },
+  {
+    title: "Major Decisions",
+    description: "Pressure-test a big purchase before you commit.",
+    items: [
+      {
+        kind: "section",
+        id: "mortgage",
+        title: "Mortgage",
+        blurb: "Can I afford this house?",
+      },
+      {
+        kind: "section",
+        id: "car-loan",
+        title: "Car Loan",
+        blurb: "Can I afford this car?",
+      },
+      {
+        kind: "coming-soon",
+        emoji: "🛍️",
+        title: "Can I Buy This?",
+        blurb: "Quick purchase sanity checks",
+      },
+    ],
+  },
+  {
+    title: "Learn",
+    description: "Build money skills and sidestep expensive mistakes.",
+    items: [
+      {
+        kind: "coming-soon",
+        emoji: "🛡️",
+        title: "Avoid Costly Mistakes",
+        blurb: "Understand big decisions before committing",
+      },
+      {
+        kind: "coming-soon",
+        emoji: "📚",
+        title: "Financial Literacy",
+        blurb: "Core money concepts, explained",
+      },
+    ],
+  },
+];
 
 function IconCar({ className }: { className?: string }) {
   return (
@@ -129,25 +192,6 @@ function IconChart({ className }: { className?: string }) {
       <path d="M7 16V9" />
       <path d="M12 16v-5" />
       <path d="M17 16V7" />
-    </svg>
-  );
-}
-
-function IconShield({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
-      <path d="M12 8v4" />
-      <path d="M12 15h.01" />
     </svg>
   );
 }
@@ -229,39 +273,53 @@ function phaseSubtitle(phase: Phase): string {
 
 function HubGroup({
   title,
+  description,
   children,
 }: {
   title: string;
+  description: string;
   children: React.ReactNode;
 }) {
   return (
     <section>
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-        {title}
-      </h2>
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+      <div className="mb-4 px-1">
+        <h2 className="text-base font-bold tracking-tight text-slate-900">
+          {title}
+        </h2>
+        <p className="mt-1 text-sm leading-relaxed text-slate-500">
+          {description}
+        </p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
+        {children}
+      </div>
     </section>
   );
 }
 
-function ComingSoonCard({ emoji, title, blurb }: ComingSoonCard) {
+function ComingSoonCard({
+  emoji,
+  title,
+  blurb,
+}: {
+  emoji: string;
+  title: string;
+  blurb: string;
+}) {
   return (
     <div
-      className="relative flex flex-col overflow-hidden rounded-2xl border border-dashed border-slate-300/80 bg-white/50 p-0 text-left opacity-90"
-      aria-disabled
+      className="relative flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border border-dashed border-slate-300/80 bg-white/40 p-5 text-left opacity-70"
+      aria-disabled="true"
     >
-      <div className="bg-gradient-to-br from-slate-200 to-slate-300 px-5 py-6 text-slate-600">
-        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden />
-          Coming soon
-        </span>
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/60 text-2xl">
-          {emoji}
-        </div>
-        <span className="text-lg font-bold text-slate-700">{title}</span>
-        <span className="mt-1 block text-sm text-slate-500">Coming soon</span>
+      <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-slate-200/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden />
+        Coming soon
+      </span>
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-2xl">
+        {emoji}
       </div>
-      <div className="px-5 py-3 text-sm font-medium text-slate-400">{blurb}</div>
+      <span className="text-lg font-bold text-slate-700">{title}</span>
+      <span className="mt-1 text-sm leading-relaxed text-slate-500">{blurb}</span>
     </div>
   );
 }
@@ -441,18 +499,17 @@ export default function Home() {
     setStartHereComingSoon(destination.title);
   }
 
-  function renderSectionCard(id: SectionId) {
+  function renderSectionCard(id: SectionId, title: string, blurb: string) {
     const t = SECTION_THEMES[id];
-    const meta = SECTIONS.find((s) => s.id === id)!;
     return (
       <button
         key={id}
         type="button"
         onClick={() => openSection(id)}
-        className={`hub-card group relative flex flex-col overflow-hidden rounded-2xl border ${t.hub.border} p-0 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 ${t.hub.shadow} ${t.hub.hoverShadow} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500`}
+        className={`hub-card group relative flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border ${t.hub.border} p-0 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 active:translate-y-0 ${t.hub.shadow} ${t.hub.hoverShadow} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500`}
       >
-        <div className={`${t.hub.gradient} px-5 py-6 text-white`}>
-          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-sm">
+        <div className={`${t.hub.gradient} flex-1 px-5 py-6 text-white`}>
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" aria-hidden />
             Available
           </span>
@@ -462,12 +519,18 @@ export default function Home() {
             {sectionIcon(id, "h-7 w-7")}
           </div>
           <span className="text-lg font-bold">
-            {t.emoji} {meta.label}
+            {t.emoji} {title}
           </span>
-          <span className="mt-1 block text-sm text-white/85">{meta.blurb}</span>
+          <span className="mt-1 block text-sm text-white/85">{blurb}</span>
         </div>
-        <div className="bg-white/90 px-5 py-3 text-sm font-semibold text-slate-700 backdrop-blur-sm group-hover:text-slate-900">
-          Get started →
+        <div className="flex items-center justify-between bg-white/90 px-5 py-3.5 text-sm font-semibold text-slate-700 backdrop-blur-sm transition-colors group-hover:text-slate-900">
+          <span>Get started</span>
+          <span
+            className="transition-transform duration-300 group-hover:translate-x-1"
+            aria-hidden
+          >
+            →
+          </span>
         </div>
       </button>
     );
@@ -640,7 +703,7 @@ export default function Home() {
         </header>
 
         {view === "hub" ? (
-          <div className="space-y-9">
+          <div className="space-y-12">
             <button
               type="button"
               onClick={() => {
@@ -662,49 +725,34 @@ export default function Home() {
                   Answer one question and we&apos;ll guide you to the right section.
                 </span>
               </span>
-              <span className="ml-auto text-xl text-white/90" aria-hidden>
+              <span
+                className="ml-auto text-xl text-white/90 transition-transform duration-300 group-hover:translate-x-1"
+                aria-hidden
+              >
                 →
               </span>
             </button>
 
-            <HubGroup title="Build Wealth">
-              {renderSectionCard("investment")}
-              <ComingSoonCard {...COMING_SOON.debt} />
-            </HubGroup>
-
-            <HubGroup title="Major Decisions">
-              {renderSectionCard("mortgage")}
-              {renderSectionCard("car-loan")}
-              <ComingSoonCard {...COMING_SOON["can-i-buy-this"]} />
-            </HubGroup>
-
-            <HubGroup title="Learn">
-              <button
-                type="button"
-                onClick={() => {
-                  trackClick("costly-mistakes", {
-                    event: "section_open",
-                    label: "section:costly-mistakes",
-                  });
-                  setView("costly-mistakes");
-                }}
-                className="hub-card group relative flex flex-col overflow-hidden rounded-2xl border border-rose-200/60 p-0 text-left shadow-sm shadow-rose-500/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-rose-500/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
+            {HUB_GROUPS.map((group) => (
+              <HubGroup
+                key={group.title}
+                title={group.title}
+                description={group.description}
               >
-                <div className="bg-gradient-to-br from-rose-400 via-rose-500 to-orange-600 px-5 py-6 text-white">
-                  <div className="hub-icon mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/25 text-white backdrop-blur-sm">
-                    <IconShield className="h-7 w-7" />
-                  </div>
-                  <span className="text-lg font-bold">🛡️ Avoid Costly Mistakes</span>
-                  <span className="mt-1 block text-sm text-white/85">
-                    Understand major financial decisions before committing.
-                  </span>
-                </div>
-                <div className="bg-white/90 px-5 py-3 text-sm font-semibold text-slate-700 backdrop-blur-sm group-hover:text-slate-900">
-                  Get started →
-                </div>
-              </button>
-              <ComingSoonCard {...COMING_SOON["financial-literacy"]} />
-            </HubGroup>
+                {group.items.map((item) =>
+                  item.kind === "section" ? (
+                    renderSectionCard(item.id, item.title, item.blurb)
+                  ) : (
+                    <ComingSoonCard
+                      key={item.title}
+                      emoji={item.emoji}
+                      title={item.title}
+                      blurb={item.blurb}
+                    />
+                  )
+                )}
+              </HubGroup>
+            ))}
           </div>
         ) : view === "costly-mistakes" ? (
           <>
@@ -718,6 +766,39 @@ export default function Home() {
               </button>
             </div>
             <CostlyMistakesModule />
+          </>
+        ) : view === "start-here" ? (
+          <>
+            <div className="mb-5 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setView("hub")}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-800 shadow-sm backdrop-blur-sm transition hover:bg-white hover:shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+              >
+                <span aria-hidden>←</span> All topics
+              </button>
+            </div>
+            <div className="rounded-2xl border border-white/80 bg-white/80 p-6 shadow-lg shadow-slate-200/30 backdrop-blur-md sm:p-8">
+              <StartHere
+                onPick={handleStartHerePick}
+                comingSoonTitle={startHereComingSoon}
+              />
+            </div>
+          </>
+        ) : view === "why-rules" ? (
+          <>
+            <div className="mb-5 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setView("hub")}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-800 shadow-sm backdrop-blur-sm transition hover:bg-white hover:shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+              >
+                <span aria-hidden>←</span> All topics
+              </button>
+            </div>
+            <div className="rounded-2xl border border-white/80 bg-white/80 p-6 shadow-lg shadow-slate-200/30 backdrop-blur-md sm:p-8">
+              <WhyTheseRules />
+            </div>
           </>
         ) : (
           <>
