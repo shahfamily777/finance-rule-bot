@@ -2,7 +2,7 @@
 // Source: specs/*.yaml
 // Regenerate: npm run specs:compile
 
-import type { CarSpec, InvestmentSpec, MortgageSpec, DebtSpec, PlatformSpec, AiBehaviorSpec, CostlyMistakesSpec } from "./types";
+import type { CarSpec, InvestmentSpec, MortgageSpec, DebtSpec, PlatformSpec, AiBehaviorSpec, CostlyMistakesSpec, FinancialLiteracySpec } from "./types";
 
 export const carSpec = {
   "id": "car-loan",
@@ -1158,6 +1158,202 @@ export const costlyMistakesSpec = {
     }
   ]
 } as const satisfies CostlyMistakesSpec;
+
+export const financialLiteracySpec = {
+  "id": "financial-literacy",
+  "meta": {
+    "label": "Financial Literacy",
+    "blurb": "Learn the money concepts that matter most.",
+    "hub_intro": "Short, practical lessons on the concepts that shape every money decision.\nRead a card, try a quick quiz, and track your progress — no jargon, no fear tactics.\n"
+  },
+  "disclaimer": "Educational guidance only. Not financial advice. No guarantees on investment returns.",
+  "topics": [
+    {
+      "id": "emergency-fund",
+      "emoji": "🛟",
+      "title": "Emergency Fund",
+      "tagline": "Cash for the unexpected — not everyday spending.",
+      "concept": "Emergency Fund",
+      "explanation": "An emergency fund is money set aside for true surprises: job loss, medical bills,\nurgent home or car repairs. It keeps you from reaching for credit cards or\nselling investments at the wrong time when life happens.\n",
+      "example": "Maya keeps $4,000 in a savings account. When her car needs a $900 repair,\nshe pays cash instead of putting it on a card at 22% interest.\n",
+      "takeaway": "Aim for a starter fund first (often around $1,000–$2,000), then build toward\n3–6 months of essential expenses. Use it only for real emergencies.\n",
+      "quiz": {
+        "question": "Which expense is most appropriate for an emergency fund?",
+        "options": [
+          "A planned vacation to celebrate a promotion",
+          "An unexpected $800 furnace repair in winter",
+          "Replacing a worn-out phone you knew was aging",
+          "A holiday gift shopping spree"
+        ],
+        "correctIndex": 1,
+        "explanation": "Emergency funds cover unplanned, necessary costs — not things you could\nsave for in advance. A sudden furnace repair is a classic example: you\ndidn't plan it, but you need heat. Vacations, expected upgrades, and\ndiscretionary spending belong in separate savings goals.\n"
+      }
+    },
+    {
+      "id": "debt",
+      "emoji": "💳",
+      "title": "Debt",
+      "tagline": "Not all debt is equal — interest rate and purpose matter.",
+      "concept": "Good vs Bad Debt",
+      "explanation": "Debt costs you interest. \"Good\" debt often funds something that may grow in\nvalue or boost earning power (like education or a reasonable mortgage).\n\"Bad\" debt usually funds consumption at high rates — especially credit cards\nyou can't pay off monthly. Minimum payments mostly cover interest, so balances\nlinger for years.\n",
+      "example": "Alex has a $5,000 credit card at 21% and a $12,000 car loan at 5%.\nPaying an extra $200 toward the card saves far more in interest than the\nsame $200 on the car loan.\n",
+      "takeaway": "List your debts by interest rate. Prioritize high-rate balances while keeping\nminimum payments on everything else. Avoid new high-interest debt while paying down.\n",
+      "quiz": {
+        "question": "Which debt should usually be prioritized?",
+        "options": [
+          "The loan with the lowest balance, regardless of rate",
+          "The debt with the highest interest rate",
+          "The mortgage, because it's the largest balance",
+          "Whichever one the lender calls about first"
+        ],
+        "correctIndex": 1,
+        "explanation": "Highest-rate debt costs you the most per dollar owed. Paying it down first\n(the \"avalanche\" method) saves the most money over time. Smallest-balance-first\n(snowball) can help motivation, but mathematically high-rate debt is usually\nthe priority.\n"
+      }
+    },
+    {
+      "id": "compound-growth",
+      "emoji": "📈",
+      "title": "Compound Growth",
+      "tagline": "Time and consistency do the heavy lifting.",
+      "concept": "Compound Growth",
+      "explanation": "Compound growth means your money earns returns, and those returns earn returns\ntoo. Starting early and contributing regularly matters more than waiting for\nthe \"perfect\" amount. Even small, steady contributions can grow significantly\nover decades.\n",
+      "example": "Jordan invests $200 every month starting at age 25. By 65, those contributions\nplus compounded growth can far exceed someone who waits until 35 and invests\n$400/month — because Jordan's money had ten extra years to compound.\n",
+      "takeaway": "Start where you are. Consistent contributions beat trying to time the market.\nTime in the market is one of the most powerful tools you have.\n",
+      "visual": {
+        "scenarios": [
+          {
+            "label": "Start at 25 — $200/mo",
+            "years": 40,
+            "monthly": 200,
+            "ratePct": 7
+          },
+          {
+            "label": "Start at 35 — $400/mo",
+            "years": 30,
+            "monthly": 400,
+            "ratePct": 7
+          }
+        ]
+      },
+      "quiz": {
+        "question": "What helps compound growth the most over a lifetime?",
+        "options": [
+          "Waiting until you can invest a large lump sum",
+          "Starting early and contributing consistently",
+          "Checking your balance every day",
+          "Moving money in and out to catch market highs"
+        ],
+        "correctIndex": 1,
+        "explanation": "Compounding rewards time. Starting early gives each dollar more years to\ngrow. Consistency keeps the engine running — you don't need a huge starting\namount. Daily checking and market-timing usually hurt more than they help.\n"
+      }
+    },
+    {
+      "id": "index-investing",
+      "emoji": "🌐",
+      "title": "Index Investing",
+      "tagline": "Own the whole market instead of betting on one company.",
+      "concept": "Index Funds",
+      "explanation": "An index fund holds a broad basket of stocks or bonds that tracks a market\nindex (like the S&P 500). Instead of picking individual companies, you own\na slice of hundreds or thousands at once. That spreads risk and keeps costs low.\n",
+      "example": "Instead of buying shares in five tech companies, Sam buys a total stock market\nindex fund. When some companies fall and others rise, the fund reflects the\noverall market — no need to guess winners.\n",
+      "takeaway": "For long-term goals, low-cost diversified index funds are a simple, proven\napproach. This module does not recommend individual stock picking.\n",
+      "quiz": {
+        "question": "What is a main benefit of index investing?",
+        "options": [
+          "Guaranteed returns every year",
+          "Diversification across many companies at low cost",
+          "Beating the market by picking hot stocks",
+          "Avoiding all risk of loss"
+        ],
+        "correctIndex": 1,
+        "explanation": "Index funds spread your money across many companies, so one bad stock hurts\nless. They also tend to have lower fees than actively managed funds. Returns\nare never guaranteed, and you can't avoid market risk — but diversification\nand low cost are real, lasting advantages.\n"
+      }
+    },
+    {
+      "id": "mortgage-basics",
+      "emoji": "🏠",
+      "title": "Mortgage Basics",
+      "tagline": "Understand the big numbers before you sign.",
+      "concept": "Mortgage Basics",
+      "explanation": "A mortgage is a long-term loan to buy a home. Your down payment reduces what\nyou borrow. The interest rate and loan term set your monthly payment. Affordability\nisn't just the payment — include taxes, insurance, maintenance, and your other\nfinancial goals.\n",
+      "example": "A $350,000 home with 10% down means borrowing $315,000. At 6.5% over 30 years,\nprincipal and interest might be around $1,990/month — before taxes and insurance\nadd several hundred more.\n",
+      "takeaway": "Keep total housing costs within a comfortable share of gross income (often around\n35% or less). A larger down payment and shorter term reduce total interest paid.\n",
+      "quiz": {
+        "question": "Which factor most directly lowers your monthly mortgage payment?",
+        "options": [
+          "A larger down payment (borrowing less)",
+          "Choosing a longer commute",
+          "Buying more furniture on credit",
+          "Skipping homeowner's insurance"
+        ],
+        "correctIndex": 0,
+        "explanation": "A bigger down payment means a smaller loan, which lowers your monthly payment\nand total interest. Commute, furniture, and skipping insurance don't reduce\nwhat you owe the lender — and skipping insurance creates serious risk.\n"
+      }
+    },
+    {
+      "id": "car-buying",
+      "emoji": "🚗",
+      "title": "Car Buying",
+      "tagline": "The sticker price is only the beginning.",
+      "concept": "Total Cost of Ownership",
+      "explanation": "Cars lose value (depreciation) — especially in the first few years. Financing\nspreads the cost but adds interest. Insurance, fuel, maintenance, and registration\nadd up every month. The true cost is payment plus all running costs over the\nyears you own the car.\n",
+      "example": "A $35,000 SUV with a $550/month payment might actually cost $750+/month once\ninsurance, gas, and maintenance are included — and after five years it may be\nworth half what was paid.\n",
+      "takeaway": "Budget for the full monthly cost, not just the loan payment. Reliable used cars\noften offer the best value. Shorter loan terms (48 months or less) reduce interest\nand upside-down risk.\n",
+      "quiz": {
+        "question": "What is depreciation?",
+        "options": [
+          "The interest charged on a car loan",
+          "The loss in a car's value over time",
+          "The cost of annual registration",
+          "A discount from the dealer"
+        ],
+        "correctIndex": 1,
+        "explanation": "Depreciation is how much value the car loses as it ages and miles add up.\nNew cars often lose the most in the first few years. Understanding this helps\nyou compare the real cost of buying new versus used.\n"
+      }
+    },
+    {
+      "id": "major-mistakes",
+      "emoji": "⚠️",
+      "title": "Major Financial Mistakes",
+      "tagline": "Patterns that quietly drain wealth — and how to avoid them.",
+      "concept": "Common Wealth Drains",
+      "explanation": "Most wealth is built or lost through a few big decisions, not daily coffee.\nCommon mistakes include carrying high-interest debt, buying more house or car\nthan the budget supports, lifestyle inflation that rises with every raise, and\npaying high fees for complex products you don't fully understand.\n",
+      "example": "After a promotion, Taylor upgraded apartment, car, and subscriptions — spending\nthe entire raise. Five years later, savings hadn't grown at all despite a\nmuch higher salary.\n",
+      "takeaway": "When income rises, increase saving and investing before upgrading lifestyle.\nSlow down on big commitments until you understand the full cost.\n",
+      "quiz": {
+        "question": "Which habit most often prevents wealth from growing despite a higher salary?",
+        "options": [
+          "Packing lunch twice a week",
+          "Lifestyle inflation — spending rises with every raise",
+          "Keeping a starter emergency fund",
+          "Using a budget app"
+        ],
+        "correctIndex": 1,
+        "explanation": "Lifestyle inflation means each raise gets absorbed by new spending instead\nof savings or debt payoff. Small frugality rarely blocks wealth — but\nautomatically upgrading housing, cars, and subscriptions with every raise\noften does.\n"
+      }
+    },
+    {
+      "id": "opportunity-cost",
+      "emoji": "⚖️",
+      "title": "Opportunity Cost",
+      "tagline": "Every dollar spent is a dollar that can't go somewhere else.",
+      "concept": "Opportunity Cost",
+      "explanation": "Opportunity cost is what you give up when you choose one use of money over\nanother. Spending $3,000 on a vacation means that $3,000 isn't paying down\ndebt, building an emergency fund, or investing for the future. Neither choice\nis automatically wrong — but tradeoffs are real.\n",
+      "example": "Choosing a $600/month car payment over a $350/month reliable used car frees\n$250/month — that's $3,000/year that could go toward retirement or a down payment.\n",
+      "takeaway": "Before a major purchase, ask: \"What else could this money do for my goals?\"\nIntentional choices beat autopilot spending.\n",
+      "quiz": {
+        "question": "You have $5,000. What best illustrates opportunity cost?",
+        "options": [
+          "The $5,000 is stolen — you lose it entirely",
+          "You spend it on a luxury vacation instead of paying off a 20% credit card",
+          "You put it in a savings account and earn a little interest",
+          "You receive $5,000 as a gift"
+        ],
+        "correctIndex": 1,
+        "explanation": "Opportunity cost is about the tradeoff between choices. The vacation might\nbe worth it — but choosing it over paying 20% credit card debt means giving\nup the guaranteed \"return\" of eliminating that expensive interest. Theft and\ngifts aren't tradeoffs between your own options.\n"
+      }
+    }
+  ]
+} as const satisfies FinancialLiteracySpec;
 export const HUB_SECTIONS = [
   { id: carSpec.id, label: carSpec.meta.label, blurb: carSpec.meta.blurb },
   { id: mortgageSpec.id, label: mortgageSpec.meta.label, blurb: mortgageSpec.meta.blurb },

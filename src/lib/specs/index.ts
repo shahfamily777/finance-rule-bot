@@ -8,6 +8,7 @@ export {
   platformSpec,
   aiBehaviorSpec,
   costlyMistakesSpec,
+  financialLiteracySpec,
   HUB_SECTIONS,
   INTAKE_POLICY_UNIVERSAL,
 } from "./bundle";
@@ -22,6 +23,9 @@ export type {
   CostlyMistakeTopic,
   CostlyMistakeQuestion,
   CostlyMistakeQuestionOption,
+  FinancialLiteracySpec,
+  FinancialLiteracyTopic,
+  FinancialLiteracyQuiz,
 } from "./types";
 export {
   formatSpecTemplate,

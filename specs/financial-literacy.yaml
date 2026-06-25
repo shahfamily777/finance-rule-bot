@@ -1,0 +1,267 @@
+# Financial Literacy module — short lessons with optional quizzes.
+# Run: npm run specs:compile
+
+id: financial-literacy
+
+meta:
+  label: Financial Literacy
+  blurb: Learn the money concepts that matter most.
+  hub_intro: |
+    Short, practical lessons on the concepts that shape every money decision.
+    Read a card, try a quick quiz, and track your progress — no jargon, no fear tactics.
+
+disclaimer: Educational guidance only. Not financial advice. No guarantees on investment returns.
+
+topics:
+  - id: emergency-fund
+    emoji: "🛟"
+    title: Emergency Fund
+    tagline: Cash for the unexpected — not everyday spending.
+    concept: Emergency Fund
+    explanation: |
+      An emergency fund is money set aside for true surprises: job loss, medical bills,
+      urgent home or car repairs. It keeps you from reaching for credit cards or
+      selling investments at the wrong time when life happens.
+    example: |
+      Maya keeps $4,000 in a savings account. When her car needs a $900 repair,
+      she pays cash instead of putting it on a card at 22% interest.
+    takeaway: |
+      Aim for a starter fund first (often around $1,000–$2,000), then build toward
+      3–6 months of essential expenses. Use it only for real emergencies.
+    quiz:
+      question: Which expense is most appropriate for an emergency fund?
+      options:
+        - A planned vacation to celebrate a promotion
+        - An unexpected $800 furnace repair in winter
+        - Replacing a worn-out phone you knew was aging
+        - A holiday gift shopping spree
+      correctIndex: 1
+      explanation: |
+        Emergency funds cover unplanned, necessary costs — not things you could
+        save for in advance. A sudden furnace repair is a classic example: you
+        didn't plan it, but you need heat. Vacations, expected upgrades, and
+        discretionary spending belong in separate savings goals.
+
+  - id: debt
+    emoji: "💳"
+    title: Debt
+    tagline: Not all debt is equal — interest rate and purpose matter.
+    concept: Good vs Bad Debt
+    explanation: |
+      Debt costs you interest. "Good" debt often funds something that may grow in
+      value or boost earning power (like education or a reasonable mortgage).
+      "Bad" debt usually funds consumption at high rates — especially credit cards
+      you can't pay off monthly. Minimum payments mostly cover interest, so balances
+      linger for years.
+    example: |
+      Alex has a $5,000 credit card at 21% and a $12,000 car loan at 5%.
+      Paying an extra $200 toward the card saves far more in interest than the
+      same $200 on the car loan.
+    takeaway: |
+      List your debts by interest rate. Prioritize high-rate balances while keeping
+      minimum payments on everything else. Avoid new high-interest debt while paying down.
+    quiz:
+      question: Which debt should usually be prioritized?
+      options:
+        - The loan with the lowest balance, regardless of rate
+        - The debt with the highest interest rate
+        - The mortgage, because it's the largest balance
+        - Whichever one the lender calls about first
+      correctIndex: 1
+      explanation: |
+        Highest-rate debt costs you the most per dollar owed. Paying it down first
+        (the "avalanche" method) saves the most money over time. Smallest-balance-first
+        (snowball) can help motivation, but mathematically high-rate debt is usually
+        the priority.
+
+  - id: compound-growth
+    emoji: "📈"
+    title: Compound Growth
+    tagline: Time and consistency do the heavy lifting.
+    concept: Compound Growth
+    explanation: |
+      Compound growth means your money earns returns, and those returns earn returns
+      too. Starting early and contributing regularly matters more than waiting for
+      the "perfect" amount. Even small, steady contributions can grow significantly
+      over decades.
+    example: |
+      Jordan invests $200 every month starting at age 25. By 65, those contributions
+      plus compounded growth can far exceed someone who waits until 35 and invests
+      $400/month — because Jordan's money had ten extra years to compound.
+    takeaway: |
+      Start where you are. Consistent contributions beat trying to time the market.
+      Time in the market is one of the most powerful tools you have.
+    visual:
+      scenarios:
+        - label: Start at 25 — $200/mo
+          years: 40
+          monthly: 200
+          ratePct: 7
+        - label: Start at 35 — $400/mo
+          years: 30
+          monthly: 400
+          ratePct: 7
+    quiz:
+      question: What helps compound growth the most over a lifetime?
+      options:
+        - Waiting until you can invest a large lump sum
+        - Starting early and contributing consistently
+        - Checking your balance every day
+        - Moving money in and out to catch market highs
+      correctIndex: 1
+      explanation: |
+        Compounding rewards time. Starting early gives each dollar more years to
+        grow. Consistency keeps the engine running — you don't need a huge starting
+        amount. Daily checking and market-timing usually hurt more than they help.
+
+  - id: index-investing
+    emoji: "🌐"
+    title: Index Investing
+    tagline: Own the whole market instead of betting on one company.
+    concept: Index Funds
+    explanation: |
+      An index fund holds a broad basket of stocks or bonds that tracks a market
+      index (like the S&P 500). Instead of picking individual companies, you own
+      a slice of hundreds or thousands at once. That spreads risk and keeps costs low.
+    example: |
+      Instead of buying shares in five tech companies, Sam buys a total stock market
+      index fund. When some companies fall and others rise, the fund reflects the
+      overall market — no need to guess winners.
+    takeaway: |
+      For long-term goals, low-cost diversified index funds are a simple, proven
+      approach. This module does not recommend individual stock picking.
+    quiz:
+      question: What is a main benefit of index investing?
+      options:
+        - Guaranteed returns every year
+        - Diversification across many companies at low cost
+        - Beating the market by picking hot stocks
+        - Avoiding all risk of loss
+      correctIndex: 1
+      explanation: |
+        Index funds spread your money across many companies, so one bad stock hurts
+        less. They also tend to have lower fees than actively managed funds. Returns
+        are never guaranteed, and you can't avoid market risk — but diversification
+        and low cost are real, lasting advantages.
+
+  - id: mortgage-basics
+    emoji: "🏠"
+    title: Mortgage Basics
+    tagline: Understand the big numbers before you sign.
+    concept: Mortgage Basics
+    explanation: |
+      A mortgage is a long-term loan to buy a home. Your down payment reduces what
+      you borrow. The interest rate and loan term set your monthly payment. Affordability
+      isn't just the payment — include taxes, insurance, maintenance, and your other
+      financial goals.
+    example: |
+      A $350,000 home with 10% down means borrowing $315,000. At 6.5% over 30 years,
+      principal and interest might be around $1,990/month — before taxes and insurance
+      add several hundred more.
+    takeaway: |
+      Keep total housing costs within a comfortable share of gross income (often around
+      35% or less). A larger down payment and shorter term reduce total interest paid.
+    quiz:
+      question: Which factor most directly lowers your monthly mortgage payment?
+      options:
+        - A larger down payment (borrowing less)
+        - Choosing a longer commute
+        - Buying more furniture on credit
+        - Skipping homeowner's insurance
+      correctIndex: 0
+      explanation: |
+        A bigger down payment means a smaller loan, which lowers your monthly payment
+        and total interest. Commute, furniture, and skipping insurance don't reduce
+        what you owe the lender — and skipping insurance creates serious risk.
+
+  - id: car-buying
+    emoji: "🚗"
+    title: Car Buying
+    tagline: The sticker price is only the beginning.
+    concept: Total Cost of Ownership
+    explanation: |
+      Cars lose value (depreciation) — especially in the first few years. Financing
+      spreads the cost but adds interest. Insurance, fuel, maintenance, and registration
+      add up every month. The true cost is payment plus all running costs over the
+      years you own the car.
+    example: |
+      A $35,000 SUV with a $550/month payment might actually cost $750+/month once
+      insurance, gas, and maintenance are included — and after five years it may be
+      worth half what was paid.
+    takeaway: |
+      Budget for the full monthly cost, not just the loan payment. Reliable used cars
+      often offer the best value. Shorter loan terms (48 months or less) reduce interest
+      and upside-down risk.
+    quiz:
+      question: What is depreciation?
+      options:
+        - The interest charged on a car loan
+        - The loss in a car's value over time
+        - The cost of annual registration
+        - A discount from the dealer
+      correctIndex: 1
+      explanation: |
+        Depreciation is how much value the car loses as it ages and miles add up.
+        New cars often lose the most in the first few years. Understanding this helps
+        you compare the real cost of buying new versus used.
+
+  - id: major-mistakes
+    emoji: "⚠️"
+    title: Major Financial Mistakes
+    tagline: Patterns that quietly drain wealth — and how to avoid them.
+    concept: Common Wealth Drains
+    explanation: |
+      Most wealth is built or lost through a few big decisions, not daily coffee.
+      Common mistakes include carrying high-interest debt, buying more house or car
+      than the budget supports, lifestyle inflation that rises with every raise, and
+      paying high fees for complex products you don't fully understand.
+    example: |
+      After a promotion, Taylor upgraded apartment, car, and subscriptions — spending
+      the entire raise. Five years later, savings hadn't grown at all despite a
+      much higher salary.
+    takeaway: |
+      When income rises, increase saving and investing before upgrading lifestyle.
+      Slow down on big commitments until you understand the full cost.
+    quiz:
+      question: Which habit most often prevents wealth from growing despite a higher salary?
+      options:
+        - Packing lunch twice a week
+        - Lifestyle inflation — spending rises with every raise
+        - Keeping a starter emergency fund
+        - Using a budget app
+      correctIndex: 1
+      explanation: |
+        Lifestyle inflation means each raise gets absorbed by new spending instead
+        of savings or debt payoff. Small frugality rarely blocks wealth — but
+        automatically upgrading housing, cars, and subscriptions with every raise
+        often does.
+
+  - id: opportunity-cost
+    emoji: "⚖️"
+    title: Opportunity Cost
+    tagline: Every dollar spent is a dollar that can't go somewhere else.
+    concept: Opportunity Cost
+    explanation: |
+      Opportunity cost is what you give up when you choose one use of money over
+      another. Spending $3,000 on a vacation means that $3,000 isn't paying down
+      debt, building an emergency fund, or investing for the future. Neither choice
+      is automatically wrong — but tradeoffs are real.
+    example: |
+      Choosing a $600/month car payment over a $350/month reliable used car frees
+      $250/month — that's $3,000/year that could go toward retirement or a down payment.
+    takeaway: |
+      Before a major purchase, ask: "What else could this money do for my goals?"
+      Intentional choices beat autopilot spending.
+    quiz:
+      question: You have $5,000. What best illustrates opportunity cost?
+      options:
+        - The $5,000 is stolen — you lose it entirely
+        - You spend it on a luxury vacation instead of paying off a 20% credit card
+        - You put it in a savings account and earn a little interest
+        - You receive $5,000 as a gift
+      correctIndex: 1
+      explanation: |
+        Opportunity cost is about the tradeoff between choices. The vacation might
+        be worth it — but choosing it over paying 20% credit card debt means giving
+        up the guaranteed "return" of eliminating that expensive interest. Theft and
+        gifts aren't tradeoffs between your own options.

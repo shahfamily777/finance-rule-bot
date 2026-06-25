@@ -3,6 +3,7 @@
 import { AssessmentView } from "@/components/AssessmentView";
 import { CostlyMistakesModule } from "@/components/CostlyMistakesModule";
 import { DebtModule } from "@/components/debt/DebtModule";
+import { FinancialLiteracyModule } from "@/components/financial-literacy/FinancialLiteracyModule";
 import { GuidedChat } from "@/components/GuidedChat";
 import { SectionGuidedIntake } from "@/components/SectionGuidedIntake";
 import { StartHere, type StartHereDestination } from "@/components/StartHere";
@@ -68,7 +69,7 @@ type HubItem =
   | { kind: "section"; id: SectionId; title: string; blurb: string }
   | {
       kind: "view";
-      view: "costly-mistakes" | "debt";
+      view: "costly-mistakes" | "debt" | "financial-literacy";
       emoji: string;
       title: string;
       blurb: string;
@@ -124,6 +125,13 @@ const HUB_GROUPS: HubGroupConfig[] = [
     items: [
       {
         kind: "view",
+        view: "financial-literacy",
+        emoji: "📚",
+        title: "Financial Literacy",
+        blurb: "Learn the money concepts that matter most",
+      },
+      {
+        kind: "view",
         view: "costly-mistakes",
         emoji: "🛡️",
         title: "Avoid Costly Mistakes",
@@ -133,7 +141,7 @@ const HUB_GROUPS: HubGroupConfig[] = [
   },
 ];
 
-const ROADMAP_ITEMS = ["Can I Buy This?", "Financial Literacy"];
+const ROADMAP_ITEMS = ["Can I Buy This?"];
 
 /**
  * Calm, desaturated card palette — deep professional tones with white text.
@@ -147,6 +155,7 @@ const CARD_BODY: Record<SectionId, string> = {
 
 const COSTLY_MISTAKES_BODY = "bg-gradient-to-br from-amber-700 to-amber-900";
 const DEBT_BODY = "bg-gradient-to-br from-slate-700 to-stone-900";
+const FINANCIAL_LITERACY_BODY = "bg-gradient-to-br from-violet-700 to-indigo-900";
 
 /** Shared card chrome so every primary card matches in width, height, and padding. */
 const CARD_BASE =
@@ -321,7 +330,7 @@ function HubGroup({
   );
 }
 
-type View = "hub" | SectionId | "costly-mistakes" | "debt" | "start-here" | "why-rules";
+type View = "hub" | SectionId | "costly-mistakes" | "debt" | "financial-literacy" | "start-here" | "why-rules";
 
 export default function Home() {
   const [view, setView] = useState<View>("hub");
@@ -362,6 +371,7 @@ export default function Home() {
     view === "hub" ||
     view === "costly-mistakes" ||
     view === "debt" ||
+    view === "financial-literacy" ||
     view === "start-here" ||
     view === "why-rules"
       ? null
@@ -533,12 +543,17 @@ export default function Home() {
   }
 
   function renderViewCard(
-    targetView: "costly-mistakes" | "debt",
+    targetView: "costly-mistakes" | "debt" | "financial-literacy",
     emoji: string,
     title: string,
     blurb: string
   ) {
-    const bodyClass = targetView === "debt" ? DEBT_BODY : COSTLY_MISTAKES_BODY;
+    const bodyClass =
+      targetView === "debt"
+        ? DEBT_BODY
+        : targetView === "financial-literacy"
+          ? FINANCIAL_LITERACY_BODY
+          : COSTLY_MISTAKES_BODY;
     return (
       <button
         key={targetView}
@@ -850,6 +865,19 @@ export default function Home() {
               </button>
             </div>
             <DebtModule />
+          </>
+        ) : view === "financial-literacy" ? (
+          <>
+            <div className="mb-5 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setView("hub")}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm font-medium text-slate-800 shadow-sm backdrop-blur-sm transition hover:bg-white hover:shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+              >
+                <span aria-hidden>←</span> All topics
+              </button>
+            </div>
+            <FinancialLiteracyModule />
           </>
         ) : view === "start-here" ? (
           <>

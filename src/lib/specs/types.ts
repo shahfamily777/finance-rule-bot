@@ -165,6 +165,40 @@ export type CostlyMistakesSpec = {
   topics: CostlyMistakeTopic[];
 };
 
+export type FinancialLiteracyQuiz = {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+};
+
+export type FinancialLiteracyVisualScenario = {
+  label: string;
+  years: number;
+  monthly: number;
+  ratePct: number;
+};
+
+export type FinancialLiteracyTopic = {
+  id: string;
+  emoji: string;
+  title: string;
+  tagline: string;
+  concept: string;
+  explanation: string;
+  example: string;
+  takeaway: string;
+  quiz?: FinancialLiteracyQuiz;
+  visual?: { scenarios: FinancialLiteracyVisualScenario[] };
+};
+
+export type FinancialLiteracySpec = {
+  id: "financial-literacy";
+  meta: { label: string; blurb: string; hub_intro: string };
+  disclaimer: string;
+  topics: FinancialLiteracyTopic[];
+};
+
 export type PlatformSpec = {
   conversation: {
     principles: string[];
