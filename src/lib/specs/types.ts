@@ -77,6 +77,52 @@ export type InvestmentSpec = {
   messages: Record<string, string>;
 };
 
+export type DebtSection = {
+  id: string;
+  title: string;
+  description: string;
+};
+
+export type DebtSpec = {
+  id: "debt";
+  meta: { label: string; blurb: string; hub_intro: string };
+  constants: {
+    starter_emergency_fund_target: number;
+    high_interest_threshold_pct: number;
+    low_interest_threshold_pct: number;
+  };
+  sections: DebtSection[];
+  rules: {
+    high_interest_debt_pct: number;
+    debt_vs_invest_focus_debt_pct: number;
+    debt_vs_invest_mixed_low_pct: number;
+    debt_vs_invest_mixed_high_pct: number;
+  };
+  snowball_avalanche: {
+    snowball: {
+      name: string;
+      description: string;
+      benefits: string[];
+      drawbacks: string[];
+    };
+    avalanche: {
+      name: string;
+      description: string;
+      benefits: string[];
+      drawbacks: string[];
+    };
+    comparison: { dimension: string; snowball: string; avalanche: string }[];
+  };
+  debt_vs_investing: {
+    focus_debt: { headline: string; condition: string; reasoning: string };
+    mixed: { headline: string; condition: string; reasoning: string };
+    consider_investing: { headline: string; condition: string; reasoning: string };
+  };
+  assessment: { wins: Record<string, string>; watch: Record<string, string> };
+  direct_answers: Record<string, string>;
+  messages: Record<string, string>;
+};
+
 export type SectionId = CarSpec["id"] | MortgageSpec["id"] | InvestmentSpec["id"];
 
 export type CostlyMistakeQuestionOption = { id: string; label: string };

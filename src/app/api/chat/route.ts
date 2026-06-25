@@ -43,6 +43,7 @@ import {
 import { finalizeAssistantReply } from "@/lib/conversation-guard";
 import { checkTopicScope, type TopicId } from "@/lib/topic-scope";
 import { explainCostlyMistake } from "@/lib/costly-mistakes/explainer";
+import { explainDebtQuestion } from "@/lib/debt/explainer";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -128,6 +129,25 @@ export async function POST(req: Request) {
       body && typeof body === "object" && "action" in body
         ? (body as { action: unknown }).action
         : null;
+
+    if (topic === "debt") {
+      const debtMessages = normalizeMessages(
+        body && typeof body === "object" && "messages" in body
+          ? (body as { messages: unknown }).messages
+          : null
+      );
+      if (!debtMessages?.length) {
+        return Response.json({ answer: "Please enter a message." });
+      }
+      const answer = explainDebtQuestion({
+        thread: debtMessages.slice(-MAX_MESSAGES),
+      });
+      return Response.json({
+        answer:
+          answer ??
+          "I couldn't answer that. Try asking about snowball vs avalanche, high-interest debt, or debt vs investing.",
+      });
+    }
 
     if (topic === "costly-mistakes") {
       const mistakeTopic =

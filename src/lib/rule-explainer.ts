@@ -15,6 +15,7 @@ import {
   isUserAskingQuestion,
   type TopicId,
 } from "@/lib/section-qa";
+import { explainDebtQuestion } from "@/lib/debt/explainer";
 
 export type ExplainThreadMsg = { role: "user" | "assistant"; content: string };
 
@@ -335,6 +336,13 @@ function explainInvestment(t: string, stateSummary: string): string | null {
   }
 
   return null;
+}
+
+/** Deterministic debt-module explanations (specs/debt.yaml). */
+export function explainDebt(
+  thread: ExplainThreadMsg[]
+): string | null {
+  return explainDebtQuestion({ thread });
 }
 
 function fallbackExplain(
