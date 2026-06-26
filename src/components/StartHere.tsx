@@ -4,7 +4,7 @@ import type { SectionId } from "@/lib/section-theme";
 
 export type StartHereDestination =
   | { kind: "section"; id: SectionId }
-  | { kind: "view"; view: "debt" }
+  | { kind: "view"; view: "debt" | "big-purchase" }
   | { kind: "coming-soon"; title: string };
 
 type Option = {
@@ -51,7 +51,7 @@ const OPTIONS: Option[] = [
     emoji: "🛍️",
     label: "Make a big purchase decision",
     sub: "A quick sanity check before you buy",
-    destination: { kind: "coming-soon", title: "Can I Buy This?" },
+    destination: { kind: "view", view: "big-purchase" },
   },
 ];
 

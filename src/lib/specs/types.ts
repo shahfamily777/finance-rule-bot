@@ -199,6 +199,50 @@ export type FinancialLiteracySpec = {
   topics: FinancialLiteracyTopic[];
 };
 
+export type BigPurchaseType = {
+  id: string;
+  label: string;
+};
+
+export type BigPurchaseSpec = {
+  id: "big-purchase";
+  meta: { label: string; blurb: string; hub_intro: string };
+  purchase_types: BigPurchaseType[];
+  constants: { starter_emergency_fund_target: number };
+  rules: {
+    comfortable_max_payment_pct: number;
+    stretch_max_payment_pct: number;
+    risky_payment_pct: number;
+    comfortable_max_dti_pct: number;
+    stretch_max_dti_pct: number;
+    risky_dti_pct: number;
+    min_ef_months_comfortable: number;
+    min_ef_months_stretch: number;
+    min_ef_months_risky: number;
+    min_down_payment_pct_comfortable: number;
+    min_down_payment_pct_stretch: number;
+    max_financing_ratio_comfortable: number;
+    max_financing_ratio_stretch: number;
+    max_financing_ratio_risky: number;
+    category_comfortable_max_score: number;
+    category_stretch_max_score: number;
+  };
+  categories: {
+    comfortable: { label: string; headline: string; description: string };
+    stretch: { label: string; headline: string; description: string };
+    risky: { label: string; headline: string; description: string };
+  };
+  assessment: {
+    wins: Record<string, string>;
+    watch: Record<string, string>;
+    next_steps: Record<string, string>;
+  };
+  reflection_questions: string[];
+  opportunity_cost: Record<string, string>;
+  direct_answers: Record<string, string>;
+  messages: Record<string, string>;
+};
+
 export type PlatformSpec = {
   conversation: {
     principles: string[];

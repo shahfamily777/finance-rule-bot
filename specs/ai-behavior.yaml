@@ -97,7 +97,7 @@ mortgage:
     - Flexibility after purchase — don't stretch to the limit
 
 can_i_buy_this:
-  status: future
+  status: active
   philosophy:
     - Intentional spending and conscious consumption
     - Affordability without stress

@@ -43,6 +43,7 @@ import {
 import { finalizeAssistantReply } from "@/lib/conversation-guard";
 import { checkTopicScope, type TopicId } from "@/lib/topic-scope";
 import { explainCostlyMistake } from "@/lib/costly-mistakes/explainer";
+import { explainBigPurchaseQuestion } from "@/lib/big-purchase/explainer";
 import { explainDebtQuestion } from "@/lib/debt/explainer";
 
 export const dynamic = "force-dynamic";
@@ -146,6 +147,25 @@ export async function POST(req: Request) {
         answer:
           answer ??
           "I couldn't answer that. Try asking about snowball vs avalanche, high-interest debt, or debt vs investing.",
+      });
+    }
+
+    if (topic === "big-purchase") {
+      const bpMessages = normalizeMessages(
+        body && typeof body === "object" && "messages" in body
+          ? (body as { messages: unknown }).messages
+          : null
+      );
+      if (!bpMessages?.length) {
+        return Response.json({ answer: "Please enter a message." });
+      }
+      const answer = explainBigPurchaseQuestion({
+        thread: bpMessages.slice(-MAX_MESSAGES),
+      });
+      return Response.json({
+        answer:
+          answer ??
+          "I couldn't answer that. Try asking about Comfortable vs Stretch vs Risky, debt-to-income, or opportunity cost.",
       });
     }
 

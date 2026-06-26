@@ -2,7 +2,7 @@
 // Source: specs/*.yaml
 // Regenerate: npm run specs:compile
 
-import type { CarSpec, InvestmentSpec, MortgageSpec, DebtSpec, PlatformSpec, AiBehaviorSpec, CostlyMistakesSpec, FinancialLiteracySpec } from "./types";
+import type { CarSpec, InvestmentSpec, MortgageSpec, DebtSpec, PlatformSpec, AiBehaviorSpec, CostlyMistakesSpec, FinancialLiteracySpec, BigPurchaseSpec } from "./types";
 
 export const carSpec = {
   "id": "car-loan",
@@ -573,7 +573,7 @@ export const aiBehaviorSpec = {
     ]
   },
   "can_i_buy_this": {
-    "status": "future",
+    "status": "active",
     "philosophy": [
       "Intentional spending and conscious consumption",
       "Affordability without stress",
@@ -1354,6 +1354,136 @@ export const financialLiteracySpec = {
     }
   ]
 } as const satisfies FinancialLiteracySpec;
+
+export const bigPurchaseSpec = {
+  "id": "big-purchase",
+  "meta": {
+    "label": "Big Purchase Decisions",
+    "blurb": "Evaluate major financial commitments before making them.",
+    "hub_intro": "Enter the purchase details and your financial picture for a calm, rule-based assessment.\nWe compare cash flow, reserves, and debt burden before and after — no predictions or guarantees.\n"
+  },
+  "purchase_types": [
+    {
+      "id": "house",
+      "label": "House"
+    },
+    {
+      "id": "vehicle",
+      "label": "Vehicle"
+    },
+    {
+      "id": "home_renovation",
+      "label": "Home Renovation"
+    },
+    {
+      "id": "college_education",
+      "label": "College Education"
+    },
+    {
+      "id": "daycare_childcare",
+      "label": "Daycare / Childcare"
+    },
+    {
+      "id": "rental_property",
+      "label": "Rental Property"
+    },
+    {
+      "id": "business_investment",
+      "label": "Business Investment"
+    },
+    {
+      "id": "other",
+      "label": "Other"
+    }
+  ],
+  "constants": {
+    "starter_emergency_fund_target": 2000
+  },
+  "rules": {
+    "comfortable_max_payment_pct": 10,
+    "stretch_max_payment_pct": 15,
+    "risky_payment_pct": 20,
+    "comfortable_max_dti_pct": 36,
+    "stretch_max_dti_pct": 40,
+    "risky_dti_pct": 43,
+    "min_ef_months_comfortable": 3,
+    "min_ef_months_stretch": 2,
+    "min_ef_months_risky": 1,
+    "min_down_payment_pct_comfortable": 20,
+    "min_down_payment_pct_stretch": 10,
+    "max_financing_ratio_comfortable": 50,
+    "max_financing_ratio_stretch": 70,
+    "max_financing_ratio_risky": 85,
+    "category_comfortable_max_score": 2,
+    "category_stretch_max_score": 5
+  },
+  "categories": {
+    "comfortable": {
+      "label": "Comfortable",
+      "headline": "Appears financially manageable",
+      "description": "Key affordability metrics fall within conservative thresholds with room for savings and reserves."
+    },
+    "stretch": {
+      "label": "Stretch",
+      "headline": "Possible but meaningful tradeoffs",
+      "description": "Some metrics are tight — the purchase may work but could reduce flexibility or slow other goals."
+    },
+    "risky": {
+      "label": "Risky",
+      "headline": "May significantly impact financial stability",
+      "description": "Multiple metrics exceed safe thresholds — this purchase could strain cash flow, reserves, or debt burden."
+    }
+  },
+  "assessment": {
+    "wins": {
+      "emergency_fund_established": "Emergency fund established",
+      "positive_monthly_savings": "Positive monthly savings",
+      "low_debt_burden": "Low debt burden",
+      "strong_down_payment": "Strong down payment",
+      "purchase_funded_comfortably": "Purchase funded comfortably",
+      "healthy_cash_reserves": "Healthy cash reserves remain"
+    },
+    "watch": {
+      "payment_strains_cash_flow": "Monthly payment may strain cash flow",
+      "emergency_fund_small": "Emergency fund too small",
+      "existing_debt_high": "Existing debt high",
+      "substantial_financing": "Substantial financing needed",
+      "savings_goals_slow": "Savings goals may slow"
+    },
+    "next_steps": {
+      "proceed_comfortably": "Proceed comfortably — your numbers suggest this purchase fits without major tradeoffs. Keep monitoring cash flow and reserves.",
+      "proceed_with_awareness": "Proceed with awareness — the purchase appears possible but will tighten your budget. Track spending and avoid adding new debt.",
+      "increase_savings": "Increase savings before purchasing — building more cash reserves would reduce stress and improve flexibility.",
+      "reduce_purchase_size": "Reduce purchase size — a smaller price or larger down payment could bring this into a more comfortable range.",
+      "delay_purchase": "Delay purchase temporarily — waiting while you strengthen reserves or cash flow may improve your position.",
+      "focus_debt_reduction": "Focus on debt reduction first — lowering existing debt payments would free room for this commitment."
+    }
+  },
+  "reflection_questions": [
+    "What am I giving up by making this purchase?",
+    "Would I still make this decision in five years?",
+    "Does this improve my life enough to justify the tradeoffs?",
+    "Is there a smaller alternative that meets most of my needs?",
+    "Am I making this intentionally — or reacting to pressure or urgency?"
+  ],
+  "opportunity_cost": {
+    "investing_capacity": "This purchase may reduce monthly investing capacity by about {amount}/month.",
+    "debt_payoff_delay": "Existing debt payoff may slow if cash flow tightens after this purchase.",
+    "flexibility_reduction": "Less monthly cushion means fewer options if income drops or expenses rise.",
+    "savings_growth_slow": "Savings growth may slow while you absorb the new payment or cash outlay.",
+    "reserve_depletion": "A large down payment or upfront cost reduces reserves available for emergencies."
+  },
+  "direct_answers": {
+    "what_is_comfortable": "Comfortable means payment ≤{comfortable_max_payment_pct}% of income, total debt ≤{comfortable_max_dti_pct}%, and emergency fund covers ≥{min_ef_months_comfortable} months of essentials after purchase.",
+    "what_is_stretch": "Stretch means one or more metrics exceed comfortable thresholds but do not all hit risky levels — tradeoffs are meaningful but not necessarily prohibitive.",
+    "what_is_risky": "Risky means multiple metrics exceed safe thresholds — payment, debt burden, or reserves could significantly strain stability.",
+    "dti_rule": "Total monthly debt payments (existing plus new) should ideally stay at or below {comfortable_max_dti_pct}% of gross monthly income."
+  },
+  "messages": {
+    "disclaimer": "Rule-based educational guidance. Not financial advice. No guarantees on outcomes or future income.",
+    "assessment_intro": "Enter your purchase details and financial picture for a calm affordability check."
+  }
+} as const satisfies BigPurchaseSpec;
 export const HUB_SECTIONS = [
   { id: carSpec.id, label: carSpec.meta.label, blurb: carSpec.meta.blurb },
   { id: mortgageSpec.id, label: mortgageSpec.meta.label, blurb: mortgageSpec.meta.blurb },
